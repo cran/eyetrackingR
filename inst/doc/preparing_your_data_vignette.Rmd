@@ -1,0 +1,225 @@
+---
+title: "Preparing your data for use with eyetrackingR"
+author: "Jacob Dink & Brock Ferguson"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Preparing your data for eyetrackingR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+> **Our Experiment**: Each eyetrackingR vignette uses the *eyetrackingR* package to analyze real data from a simple 2-alternative forced choice (2AFC) word recognition task administered to 19- and 24-month-olds.
+> On each trial, infants were shown a picture of an animate object (e.g., a horse) and an inanimate object (e.g., a spoon). After inspecting the images, they disappeared and they heard a label referring to one of them (e.g., "The horse is nearby!"). Finally, the objects re-appeared on the screen and they were prompted to look at the target (e.g., "Look at the horse!").
+
+# Overview of this vignette
+
+This vignette will cover the basics of preparing your data for use with eyetrackingR.
+
+## Your Data
+
+eyetrackingR is designed to deal with data in a (relatively) raw form, where **each row specifies a sample.** Each row should represent an equally spaced unit of time (e.g., if your eye-tracker's sample rate is 100hz, then each row corresponds to the eye-position every 10ms). 
+
+This is in contrast to the more parsed data that the software bundled with eye-trackers can sometimes output (e.g., already parsed into saccades or fixations). For eyetrackingR, the simplest data is the best. 
+
+This also **maximizes compatibility:** eyetrackingR will work with any eye-tracker's data (e.g., Eyelink, Tobii, etc.), since it requires the most basic format.
+
+**Note:** eyetrackingR does not handle reading your data into R. Most software bundled with your eyetracker should be capable of exporting your data to a delimited format (.csv, tab-delimited .txt), etc. From there, you can use base functions like `read.delim`, or (recommended) check out the package <a href="https://cran.r-project.org/package=readr">readr</a>.
+
+***
+
+eyetrackingR just needs to the following columns:
+
+* **Participant Columns:** Specifies the unique code for each participant (e.g., 'SUBJ101')
+* **Trial Columns:** Specifies the unique name or number of each trial. For experiments in which each subject sees each item only once, this can be either a name (e.g., 'HORSE-DOG') or a number (e.g., trial 1, 2, 3, etc.). But if trials see items multiple times, this will almost always be a number.
+* **Timestamp Column:** Specifies the cumulative time passed within each trial (e.g., in milliseconds: 0, 50, 100, ..., 1500). This column specifies the time-within-trial. If you have a timestamp column, but the beginning of the timestamp doesn't correspond to the beginning of the trial in the way you'd like, the function `subset_by_window` can help fix this.
+* **AOI Column(s):** (Note: If you don't have these columns, the function `add_aoi` can create them-- see below.) These columns specify whether the gaze is in a particular 'Area of Interest.' Each AOI should have a corresponding column. The elements of this column specify, for each sample, whether the participant's gaze was in that AOI.
+* **Trackloss Column:** Specifies, for each sample, whether the eye-tracker lost the eyes for that sample. Helpful for cleaning data and removing unreliable trials. See `clean_by_trackloss` below.
+
+There are also some optional columns, which you might want to use depending on your analysis:
+
+* **Item column(s):** This corresponds to any 'items' in your experiment: types of stimuli presented across trials. This is likely to always be a name (e.g., 'HORSE-DOG') and, unlike the 'Trial' column, this does not need to be unique.
+* **Miscellaneous predictor column(s):** These are columns specifying predictors (e.g., Condition, Age, Sex). Unlike the types above, these are specified separately for each analysis, not at the outset).
+
+If your dataset has these columns, you're ready to begin using eyetrackingR.
+
+# Data Preparation
+
+## Load dataset and dependencies, set data options for eyetrackingR.
+
+Before being used in eyetrackingR, data must be run through the `make_eyetrackingr_data` function. 
+
+This lets you provide the information about your dataset that was just described above. The function will perform some checks on your data to make sure it's in the correct format.
+
+For this dataset, because each participant saw each item only once in this experiment, `trial_column` specifies a unique name for each trial (e.g., "FamiliarCow") and we don't specify an `item_column`.
+
+```{r results='hide'}
+set.seed(42)
+
+library("Matrix")
+library("lme4")
+library("ggplot2")
+library("eyetrackingR")
+
+data("word_recognition")
+data <- make_eyetrackingr_data(word_recognition, 
+                       participant_column = "ParticipantName",
+                       trial_column = "Trial",
+                       time_column = "TimeFromTrialOnset",
+                       trackloss_column = "TrackLoss",
+                       aoi_columns = c('Animate','Inanimate'),
+                       treat_non_aoi_looks_as_missing = TRUE
+)
+```
+
+### Dealing with Non-AOI Looks
+
+You might be wondering about the `treat_non_aoi_looks_as_missing` argument above.
+
+Almost all eyetracking analyses require calculating proportion looking--across a trial, within a time bin, etc. One important choice you as the researcher have to make is whether to include non-AOI looking in this calculation. There are two options:
+
+* **Treat Non-AOI Looks as Missing Data.** For many visual world paradigms, this move reflects the assumption that looking to a blank portion of the screen might as well be considered trackloss. The main advantage to this technique is that it makes analyses focusing on the tradeoff between two or more AOI more easily interpretable. Without treating outside looks as trackloss, it can be difficult to interpret an increase in looking to a single AOI across conditions. Was this due to an overall increase in attention (that is, looking to _all_ AOIs, including the one of interest, increased)? Or due to an increase in preference for that AOI specifically? 
+* **Treat Non-AOI Looks as Valid Data** The tradeoff with the above is that, if we are interested in overall attention to all AOIs across conditions, then the previous approach will obscure this difference. So the alternative is to treat non-AOI looks as valid. 
+
+The argument `treat_non_aoi_looks_as_missing` lets you decide which of these options eyetrackingR will do. If set to TRUE, when it comes time for eyetrackingR to calculate proportion looking to an AOI, this will be calculated as "time looking to that AOI divided by time looking to all other AOIs." In contrast, if this parameter is set to FALSE, proportion looking to an AOI will be calculated as "time looking to that AOI divided by total time looking (excluding actual trackloss)."
+
+## Cleaning Up Messy Data:
+
+We all wish our data came right out of our eye-tracker ready for analysis, but this isn't always the case. Two of the more annoying problems you might encounter are:
+
+* **Your data doesn't have any columns corresponding to areas-of-interest.** Maybe you needed to create or revise these after running the experiment, or your eyetracking software just doesn't let you specify them.
+
+* **Your data doesn't specify when the relevant things in a trial start.** Experiments are complicated. There are pre-phases, fixation-contigent attention-getters, etc. etc. All this means that the stuff you actually want to analyze within a trial could be buried among lots of irrelevant data. For example, you might want to only analyze data after stimulus presentation, but have stimuli that starts at a different timepoint on each trial.
+
+Luckily, eyetrackingR has tools to address both of these problems
+
+### Adding an Area-of-Interest
+
+Your eyetracking data doesn't have any columns corresponding to areas of interest. However, it does have columns give you the x,y gaze coordinates. You also have a csv file for each AOI, specifying its boundaries on each type of trial.
+
+In that case, it's easy to add AOIs to your dataframe:
+
+```{r, eval=FALSE}
+animate_aoi <- read.csv("./interest_areas_for_animate_aoi.csv")
+
+#            Trial Left Top Right Bottom
+# 1   FamiliarBird  500 100   900    500
+# 2 FamiliarBottle  400 200   800    600
+# 3    FamiliarCow  500 300   900    700
+# 4    FamiliarDog  300 100   700    500
+# 5  FamiliarHorse  500 200   900    600
+# 6  FamiliarSpoon  350 300   750    700
+
+data <- add_aoi(data = data, aoi_dataframe = animate_aoi, 
+               x_col = "GazeX", y_col = "GazeY", 
+               aoi_name = "Animate",
+               xmin_col = "Left",xmax_col = "Top", ymin_col = "Right",ymax_col = "Bottom")
+```
+
+This can be done for each AOI: just load in a csv file and run the `add_aoi` function for each.
+
+After using this function, you should probably check that the added AOI column actually indicates that the gaze was ever in the AOI. For example:
+
+```{r}
+table(data$Animate)
+table(is.na(data$Animate)) # if all TRUE, then something went wrong.
+```
+
+(Note that you should typically add your AOIs to your dataframe **before** running `make_eyetrackingr_data`, since that function will check your AOIs.)
+
+### Subsetting into the Time-Window of Interest Across Trials
+
+eyetrackingR's `subset_by_window` has several methods for getting the data you're interested in. These are powerful because they can be used repeatedly/iteratively to home in on the relevant data. We show this below.
+
+```{r, echo=FALSE}
+data$Message <- with(data, ifelse(TimeFromTrialOnset==0, "TrialStart", "."))
+data$ResponseWindowStart <- 15500 
+```
+
+In this example, let's imagine that our Timestamp doesn't actually specify the start of the trial-- instead, it specifies the time since the eye-tracker was turned on!
+
+Fortunately, our eye-tracker sends a message when each trial starts (this is not always the same as the very first sample for the trial-- recording often starts a few hundred milliseconds before the trial does). This message can be used to set the zero-point for each trial.
+
+```{r}
+data <- subset_by_window(data, window_start_msg = "TrialStart", msg_col = "Message", rezero= TRUE)
+```
+
+Unfortunately, the eye-tracker didn't send a message for when the response-window starts. Instead, it added a column that tells you how long after the start of the trial the response-window started. Now that we have rezero'd our data so that 0 = trial-start, this column specifying the time after trial start can be used easily.
+
+```{r}
+response_window <- subset_by_window(data, window_start_col = "ResponseWindowStart", rezero= FALSE, remove= TRUE)
+```
+
+Finally, our trials always ended after 21 seconds. So we'll simply remove data from after this.
+
+```{r}
+response_window <- subset_by_window(response_window, window_end_time = 21000, rezero= FALSE, remove= TRUE)
+```
+
+In summary, we have subset the data to focus on our time window of interest (a "response window" beginning 500ms pre-word-onset, 15500ms after the start of the trial, and ending at the end of the trial 5500ms later)
+
+## Dealing with trackloss
+
+Trackloss occurs when the eye-tracker loses track of the participant's eyes (e.g., when they turn away or blink) or when it captures their gaze location but with very low validity.
+
+We need to decide which trials to remove (if any) due to very high trackloss. To do so here, we will:
+
+* Calculate the amount of trackloss in each trial
+* Remove trials with over 25% trackloss
+
+```{r, warning=FALSE}
+# analyze amount of trackloss by subjects and trials
+(trackloss <- trackloss_analysis(data = response_window))
+
+response_window_clean <- clean_by_trackloss(data = response_window, trial_prop_thresh = .25)
+```
+
+## How much data are we left with?
+
+After data cleaning, it's important to assess how much data you are ultimately left with to (a) report along with your findings and, (b) identify any problematic participants who didn't contribute enough trials from which to reliably estimate their performance.
+
+### Assess mean trackloss for each participant
+
+```{r, warning=FALSE}
+trackloss_clean <- trackloss_analysis(data = response_window_clean)
+
+(trackloss_clean_subjects <- unique(trackloss_clean[, c('ParticipantName','TracklossForParticipant')]))
+```
+
+### Summarize samples contributed per trial
+
+```{r, warning=FALSE}
+# get mean samples contributed per trials, with SD
+mean(1 - trackloss_clean_subjects$TracklossForParticipant)
+sd(1- trackloss_clean_subjects$TracklossForParticipant)
+```
+
+### Assess number of trials contributed by each participant
+
+```{r, warning=FALSE}
+# look at the NumTrials column
+(final_summary <- describe_data(response_window_clean, 'Animate', 'ParticipantName'))
+```
+
+### Summarize number of trials contributed
+
+```{r, warning=FALSE}
+mean(final_summary$NumTrials)
+sd(final_summary$NumTrials)
+```
+ 
+## Create additional columns needed for analysis
+
+Now is the time to make sure that we have all the columns needed for our analyses, because this dataset is going to be shaped and subsetted as we analyze our data and it's easier to add these columns once then to do it for derivative datasets.
+
+For the present experiment, one thing we want to do is create a "Target" condition column based on the name of each Trial.
+
+In each trial, the participant was told to look at either an Animate or Inanimate objects. Here we create a column specifying which for each column.
+
+```{r, warning=FALSE}
+response_window_clean$Target <- as.factor( ifelse(test = grepl('(Spoon|Bottle)', response_window_clean$Trial), 
+                                       yes = 'Inanimate', 
+                                       no  = 'Animate') )
+```
+
+Our dataset is now ready for analysis!

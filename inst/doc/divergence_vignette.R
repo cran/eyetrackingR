@@ -63,10 +63,27 @@ bootstrap_analysis_familiar <- analyze_boot_splines(bootstrapped_familiar)
 summary(bootstrap_analysis_familiar)
 
 ## ---- warning=FALSE------------------------------------------------------
-alpha = .05
+response_time_item <- make_time_sequence_data(response_window_clean,
+                                  time_bin_size = 100, 
+                                  predictor_columns = c("Target"),
+                                  aois = "Animate",
+                                  summarize_by = "Trial") # <---"Trial" corresponds to both item and trial 
+bootstrapped_familiar_item <- make_boot_splines_data(response_time_item, 
+                                              predictor_column = 'Target', 
+                                              within_subj = FALSE, 
+                                              samples = 1000, 
+                                              alpha = .05,
+                                              smoother = "smooth.spline") 
+plot(bootstrapped_familiar_item)
+bootstrap_analysis_familiar_item <- analyze_boot_splines(bootstrapped_familiar_item)
+plot(bootstrap_analysis_familiar_item)
+summary(bootstrap_analysis_familiar_item)
+
+## ---- warning=FALSE------------------------------------------------------
 num_sub = length(unique((response_window_clean$ParticipantName)))
-threshold_t = qt(p = 1 - alpha/2, 
+threshold_t = qt(p = 1 - .05/2, 
                  df = num_sub-1) # pick threshold t based on alpha = .05 two tailed
+levels(response_window_clean$Target) 
 
 ## ---- warning=FALSE------------------------------------------------------
 df_timeclust <- make_time_cluster_data(response_time, 
@@ -81,7 +98,8 @@ summary(df_timeclust)
 ## ---- warning=FALSE------------------------------------------------------
 clust_analysis <- analyze_time_clusters(df_timeclust, within_subj = TRUE, paired=TRUE, 
                                         samples=100) # in practice, you should use a lot more
-summary(clust_analysis)
-
 plot(clust_analysis)
+
+## ---- warning=FALSE------------------------------------------------------
+summary(clust_analysis)
 

@@ -1,7 +1,9 @@
 #' Bootstrap resample splines for time-series data.
 #'
-#' Bootstrap splines from \code{time_sequence_data()}. This creates a distribution from which a non-parametric
-#' analysis can be performed.
+#' This function takes proportion-looking data over-time (from \code{time_sequence_data()}), fits 
+#' smoothing splines to this data, then bootstrap-resampes these splines to create a distribution.
+#' This distribution can be used by \code{analyze_boot_splines} to test when divergences between two
+#' conditions occur.
 #' @export
 make_boot_splines_data = function(data, predictor_column, within_subj, aoi,smoother, samples, resolution, alpha) {
   UseMethod("make_boot_splines_data")
@@ -12,7 +14,7 @@ make_boot_splines_data = function(data, predictor_column, within_subj, aoi,smoot
 #' @param predictor_column What predictor var to split by? Maximum two conditions
 #' @param within_subj Are the two conditions within or between subjects?
 #' @param aoi Which AOI do you wish to perform the analysis on?
-#' @param smoother Smooth data using "smooth.spline," "loess," or leave NULL for no smoothing
+#' @param smoother Smooth data using "smooth.spline," "loess," or "none" for no smoothing
 #' @param samples How many iterations to run bootstrap resampling? Default 1000
 #' @param resolution What resolution should we return predicted splines at, in ms? e.g., 10ms = 100
 #'   intervals per second, or hundredths of a second. Default is the same size as time-bins.
@@ -51,16 +53,16 @@ make_boot_splines_data.time_sequence_data <- function (data,
                                                        samples = 1000,
                                                        resolution = NULL,
                                                        alpha = .05) {
-  if (!requireNamespace("pbapply", quietly = TRUE)) {
-    pbreplicate <- function(n, expr, simplify) replicate(n, expr, simplify)
-    message("Install package 'pbapply' for a progress bar in this function.")
-  } else {
-    pbreplicate <- pbapply::pbreplicate
-  }
   
   # get attrs:
   attrs <- attr(data, "eyetrackingR")
   data_options <- attrs$data_options
+  
+  # check predictor:
+  if (!is.factor(data[[predictor_column]])) {
+    message("Coercing ", predictor_column, " to factor...")
+    data[[predictor_column]] <- factor(data[[predictor_column]])
+  }
 
   # Make sure data is summarized:  
   summarized_by <- attrs$summarized_by
@@ -140,7 +142,7 @@ make_boot_splines_data.time_sequence_data <- function (data,
       run_subjects_rows <- lapply(run_subjects, function(sub) subsetted_data$RowNum[ subsetted_data[[summarized_by]] == sub ])
 
       # bootstrap
-      bootstrapped_data <- pbreplicate(samples, sampler(subsetted_data, run_subjects_rows, data_options, resolution, smoother))
+      bootstrapped_data <- replicate(samples, sampler(subsetted_data, run_subjects_rows, data_options, resolution, smoother))
       bootstrapped_data <- data.frame(matrix(unlist(bootstrapped_data), nrow=nrow(bootstrapped_data), byrow=FALSE))
 
       # label each sample by number
@@ -181,7 +183,7 @@ make_boot_splines_data.time_sequence_data <- function (data,
     run_subjects_rows = lapply(run_subjects, function(sub) df_diff$RowNum[ df_diff[[summarized_by]] == sub ])
 
     # bootstrap
-    bootstrapped_data <- pbreplicate(samples, sampler(df_diff, run_subjects_rows, data_options, resolution, smoother))
+    bootstrapped_data <- replicate(samples, sampler(df_diff, run_subjects_rows, data_options, resolution, smoother))
     bootstrapped_data <- data.frame(matrix(unlist(bootstrapped_data), nrow=nrow(bootstrapped_data), byrow=FALSE))
 
     sample_rows <- paste('Sample', c(1:samples), sep="")
@@ -393,7 +395,7 @@ plot.boot_splines_data = function(x, ...) {
 
     g <- ggplot(x, aes_string(x='Time', y='Mean', color=bootstrap_attr$predictor_column)) +
       geom_line() +
-      geom_ribbon(aes_string(ymax='CI_high', ymin='CI_low', fill=bootstrap_attr$predictor_column), mult=1, alpha=.2, colour=NA) +
+      geom_ribbon(aes_string(ymax='CI_high', ymin='CI_low', fill=bootstrap_attr$predictor_column), alpha=.2, colour=NA) +
       xlab('Time') +
       ylab('Proportion')
   }
@@ -421,7 +423,7 @@ plot.boot_splines_analysis <- function(x, ...) {
   # we have a MeanDiff and CI for both within- and between-subjects...
   g <- ggplot(x, aes(x=Time, y=MeanDiff)) +
     geom_line() +
-    geom_ribbon(aes(ymax=CI_high, ymin=CI_low), mult=1, alpha=.2, colour=NA) +
+    geom_ribbon(aes(ymax=CI_high, ymin=CI_low), alpha=.2, colour=NA) +
     xlab('Time') +
     geom_hline(yintercept = 0, linetype="dashed")
 

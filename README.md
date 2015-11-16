@@ -2,8 +2,6 @@ eyetrackingR
 =====================================
 
 ## Eye-tracking Data: Cleaning, Analysis, & Visualization
-#### Version: 0.1.0
-
 
 - Jacob Dink (jacobwdink@gmail.com)
 - Brock Ferguson (brock.ferguson@gmail.com)
@@ -15,20 +13,12 @@ www.eyetracking-r.com
 
 ## Installation
 
-To install:
-```
-install.packages("eyetrackingR")
-```
-
-To load: 
-```
-library("eyetrackingR")
-```
-
-For the development version:
+To install (make sure you have run `install.packages("devtools")` to get devtools first):
 ```
 devtools::install_github("jwdink/eyetrackingR")
 ```
+
+We'll be uploading to CRAN very soon!
 
 ---
 

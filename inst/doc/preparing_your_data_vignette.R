@@ -30,7 +30,7 @@ data <- make_eyetrackingr_data(word_recognition,
 #  data <- add_aoi(data = data, aoi_dataframe = animate_aoi,
 #                 x_col = "GazeX", y_col = "GazeY",
 #                 aoi_name = "Animate",
-#                 xmin_col = "Left",xmax_col = "Top", ymin_col = "Right",ymax_col = "Bottom")
+#                 x_min_col = "Left", x_max_col = "Right", y_min_col = "Top", y_max_col = "Bottom")
 
 ## ------------------------------------------------------------------------
 table(data$Animate)

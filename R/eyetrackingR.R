@@ -10,6 +10,13 @@
 #' @importFrom lazyeval interp
 #' @import ggplot2
 #' @import dplyr
+#' @importFrom stats  plogis
+#' @importFrom stats  qlogis
+#' @importFrom stats  rnorm
+#' @importFrom stats  qgamma
+#' @importFrom stats  rbinom
+#' @importFrom stats  rexp
+#' @importFrom stats  rpois
 #' @importFrom stats  as.formula
 #' @importFrom stats  formula
 #' @importFrom stats  median
@@ -65,4 +72,17 @@ utils::globalVariables(c('Prop',
                          'TotalTrialLength',
                          'SumTracklossForTrial',
                          'TracklossForTrial',
-                         'TracklossForParticipant'))
+                         'TracklossForParticipant',
+                         '.SpeedOffset',
+                         'RT',
+                         '.PrefOnset',
+                         '.NumSwitches',
+                         'AOI1',
+                         'Condition',
+                         'NegativeRuns', 
+                         'ParticipantLogOdds',
+                         'TrialLogOdds',
+                         'Item',
+                         'Participant',
+                         'PositiveRuns',
+                         'Trial'))

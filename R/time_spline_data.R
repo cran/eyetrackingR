@@ -1,11 +1,15 @@
 #' Bootstrap resample splines for time-series data.
 #'
-#' This function takes proportion-looking data over-time (from \code{time_sequence_data()}), fits 
-#' smoothing splines to this data, then bootstrap-resampes these splines to create a distribution.
-#' This distribution can be used by \code{analyze_boot_splines} to test when divergences between two
-#' conditions occur.
+#' Deprecated. Performing this analysis should be done by calling \code{analyze_time_bins(test="boot_splines")}. 
+#' 
+#' This method builds confidence intervals around proportion-looking data by bootstrap resampling.
+#' Data can be smoothed by fitting smoothing splines. This function performs the bootstrap resampling,
+#' \code{analyze_boot_splines} generates confidence intervals and tests for divergences.
+#' 
+#' Limited to statistical test between two conditions.
+#' 
 #' @export
-make_boot_splines_data = function(data, predictor_column, within_subj, aoi,smoother, samples, resolution, alpha) {
+make_boot_splines_data = function(data, predictor_column, within_subj, aoi, bs_samples, smoother, resolution, alpha, ...) {
   UseMethod("make_boot_splines_data")
 }
 #' @describeIn make_boot_splines_data
@@ -14,11 +18,12 @@ make_boot_splines_data = function(data, predictor_column, within_subj, aoi,smoot
 #' @param predictor_column What predictor var to split by? Maximum two conditions
 #' @param within_subj Are the two conditions within or between subjects?
 #' @param aoi Which AOI do you wish to perform the analysis on?
+#' @param bs_samples How many iterations to run bootstrap resampling? Default 1000
 #' @param smoother Smooth data using "smooth.spline," "loess," or "none" for no smoothing
-#' @param samples How many iterations to run bootstrap resampling? Default 1000
 #' @param resolution What resolution should we return predicted splines at, in ms? e.g., 10ms = 100
 #'   intervals per second, or hundredths of a second. Default is the same size as time-bins.
 #' @param alpha p-value when the groups are sufficiently "diverged"
+#' @param ... Ignored
 #' 
 #' @examples 
 #' data(word_recognition)
@@ -38,7 +43,7 @@ make_boot_splines_data = function(data, predictor_column, within_subj, aoi,smoot
 #' df_bootstrapped <- make_boot_splines_data(response_time, 
 #'                                           predictor_column = 'Sex', 
 #'                                           within_subj = FALSE, 
-#'                                           samples = 500, 
+#'                                           bs_samples = 500, 
 #'                                           alpha = .05,
 #'                                           smoother = "smooth.spline") 
 #' 
@@ -49,14 +54,30 @@ make_boot_splines_data.time_sequence_data <- function (data,
                                                        predictor_column,
                                                        within_subj,
                                                        aoi = NULL,
+                                                       bs_samples = 1000,
                                                        smoother = "smooth.spline",
-                                                       samples = 1000,
                                                        resolution = NULL,
-                                                       alpha = .05) {
+                                                       alpha = .05, ...) {
   
   # get attrs:
   attrs <- attr(data, "eyetrackingR")
   data_options <- attrs$data_options
+  called_from_top <- !isNamespace(topenv(parent.frame(1)))
+  if (called_from_top) {
+    .Deprecated(msg = "Calling boot-splines from this function is deprecated. Please use `analyze_time_bins` for boot-splines.")
+  }
+  dots <- lazyeval::lazy_dots(...)
+  if ( !is.null(dots$samples) ) {
+    if (missing(bs_samples)) {
+      bs_samples <- eval(dots$samples$expr)
+      warning("The 'samples' argument is deprecated, please use 'bs_samples' in the future.", call. = FALSE)
+    }
+    for (extra_arg in names(dots)) {
+      if (extra_arg!="samples") warning("Argument '", extra_arg, "' ignored.", call. = FALSE)
+    }
+  }
+  
+  
   
   # check predictor:
   if (!is.factor(data[[predictor_column]])) {
@@ -69,7 +90,9 @@ make_boot_splines_data.time_sequence_data <- function (data,
   if (is.null(summarized_by)) stop("This analysis requires summarized data. ",
                                    "When using the 'make_time_sequence_data' function, please select an argument for 'summarize_by'",
                                    " (e.g., the participant column).")
-
+  if (length(summarized_by)>1) stop("Data should only be summarized by one thing (e.g., participant, item, not both). ",
+                                    "Participant/Item analyses should be run separately.")
+  
   # validate arguments
   if ( length(levels(as.factor(data[[predictor_column]]))) != 2 ) {
     stop('make_boot_splines_data requires a predictor_column with exactly 2 levels.')
@@ -93,7 +116,7 @@ make_boot_splines_data.time_sequence_data <- function (data,
     # This gives you a vector specifying which rows to extract, in order to extract the data corresponding to the sampled subjects
     sampled_subject_rows <- unlist(sample(run_subjects_rows, length(run_subjects_rows), replace = TRUE))
     run_data <- run_original[sampled_subject_rows,]
-
+    
     if (smoother == "none") {
       # use straight linear approximation on the values
       run_predicted_times <- seq(min(run_original$Time), max(run_original$Time), by=resolution)
@@ -111,7 +134,6 @@ make_boot_splines_data.time_sequence_data <- function (data,
       # get interpolated spline predictions for total time at *resolution*
       run_predicted_times <- seq(min(run_original$Time), max(run_original$Time), by=resolution)
       run_predictions <- predict(run_spline, run_predicted_times)
-
       return(run_predictions$y)
     }
     else if (smoother == 'loess') {
@@ -125,6 +147,7 @@ make_boot_splines_data.time_sequence_data <- function (data,
 
       return (run_predictions)
     }
+    
   }
 
   # this dataframe will hold our final dataset
@@ -142,11 +165,11 @@ make_boot_splines_data.time_sequence_data <- function (data,
       run_subjects_rows <- lapply(run_subjects, function(sub) subsetted_data$RowNum[ subsetted_data[[summarized_by]] == sub ])
 
       # bootstrap
-      bootstrapped_data <- replicate(samples, sampler(subsetted_data, run_subjects_rows, data_options, resolution, smoother))
+      bootstrapped_data <- replicate(bs_samples, sampler(subsetted_data, run_subjects_rows, data_options, resolution, smoother))
       bootstrapped_data <- data.frame(matrix(unlist(bootstrapped_data), nrow=nrow(bootstrapped_data), byrow=FALSE))
 
       # label each sample by number
-      sample_rows <- paste('Sample', c(1:samples), sep="")
+      sample_rows <- paste('Sample', c(1:bs_samples), sep="")
       colnames(bootstrapped_data) <- sample_rows
 
       bootstrapped_data <- data.frame(stringsAsFactors = FALSE,
@@ -158,6 +181,8 @@ make_boot_splines_data.time_sequence_data <- function (data,
 
       #
       combined_bootstrapped_data <- bind_rows(combined_bootstrapped_data,bootstrapped_data)
+      combined_bootstrapped_data[[predictor_column]] <- factor(combined_bootstrapped_data[[predictor_column]], 
+                                                               levels = levels(data[[predictor_column]]))
     }
   }
   else {
@@ -183,10 +208,10 @@ make_boot_splines_data.time_sequence_data <- function (data,
     run_subjects_rows = lapply(run_subjects, function(sub) df_diff$RowNum[ df_diff[[summarized_by]] == sub ])
 
     # bootstrap
-    bootstrapped_data <- replicate(samples, sampler(df_diff, run_subjects_rows, data_options, resolution, smoother))
+    bootstrapped_data <- replicate(bs_samples, sampler(df_diff, run_subjects_rows, data_options, resolution, smoother))
     bootstrapped_data <- data.frame(matrix(unlist(bootstrapped_data), nrow=nrow(bootstrapped_data), byrow=FALSE))
 
-    sample_rows <- paste('Sample', c(1:samples), sep="")
+    sample_rows <- paste('Sample', c(1:bs_samples), sep="")
     colnames(bootstrapped_data) <- sample_rows
 
     bootstrapped_data <- data.frame(
@@ -204,7 +229,7 @@ make_boot_splines_data.time_sequence_data <- function (data,
     bootstrapped = list(data_options = data_options,
                         within_subj = within_subj,
                         predictor_column = predictor_column,
-                        samples = samples,
+                        samples = bs_samples,
                         alpha = alpha,
                         resolution = resolution,
                         min_time = min(combined_bootstrapped_data[['Time']])
@@ -214,10 +239,12 @@ make_boot_splines_data.time_sequence_data <- function (data,
 }
 
 #' Estimate confidence intervals for bootstrapped splines data
+#' 
+#' Deprecated. Performing this analysis should be done by calling \code{analyze_time_bins(test="boot_splines")}. 
 #'
 #' Estimates a confidence interval over the difference between means (within- or between-subjects)
-#' from a \code{boot_splines_data} object. Confidence intervals are derived from the alpha
-#' used to shape the dataset (e.g., alpha = .05, CI=(.025,.975); alpha=.01, CI=(.005,.0995))
+#' from \code{boot_splines_data}. Confidence intervals are derived from the alpha argument in 
+#' \code{boot_splines_data} (e.g., alpha = .05, CI=(.025,.975); alpha=.01, CI=(.005,.0995))
 #' @export
 analyze_boot_splines <- function(data) {
   UseMethod("analyze_boot_splines")
@@ -246,7 +273,7 @@ analyze_boot_splines <- function(data) {
 #' df_bootstrapped <- make_boot_splines_data(response_time,
 #'                                           predictor_column = 'Sex',
 #'                                           within_subj = FALSE,
-#'                                           samples = 500,
+#'                                           bs_samples = 500,
 #'                                           alpha = .05,
 #'                                           smoother = "smooth.spline")
 #' 
@@ -257,6 +284,16 @@ analyze_boot_splines <- function(data) {
 #' @export
 #' @return A dataframe indicating means and CIs for each time-bin
 analyze_boot_splines.boot_splines_data <- function(data) {
+  
+  ## Helpers:
+  .get_nonparametric_stat <- function(x,y) {
+    .weighted_iqr <- function(x,y) {
+      iqr_x <- diff(quantile(x, probs = c(.05, .95)))
+      iqr_y <- diff(quantile(y, probs = c(.05, .95)))
+      (iqr_x*length(x) + iqr_y*length(y))/length(c(x,y))
+    }
+    (median(x)-median(y)) / .weighted_iqr(x,y)
+  }
 
   # make sure there is the proper kind of data frame, and check its attributes
   attrs = attr(data, "eyetrackingR")
@@ -264,56 +301,45 @@ analyze_boot_splines.boot_splines_data <- function(data) {
   data_options = attrs$data_options
   if (is.null(bootstrap_attr)) stop("Dataframe has been corrupted.") # <----- fix later
 
+  called_from_top <- !isNamespace(topenv(parent.frame(1)))
+  if (called_from_top) {
+    .Deprecated(msg = "Calling boot-splines from this function is deprecated. Please use `analyze_time_bins` for boot-splines.")
+  }
+  
+  
   # adjust CI based on alpha
   low_prob <- .5 - ((1-bootstrap_attr$alpha)/2)
   high_prob <- .5 + ((1-bootstrap_attr$alpha)/2)
 
-  # if it's within subjects, getting the Mean and CI involves only taking the mean and 1.96*SD at each timepoint
   if (bootstrap_attr$within_subj == TRUE) {
-
-    samples = data[, -1]
-
-    bootstrapped_data <- data.frame(
-      Time = data[['Time']],
-      MeanDiff = apply(samples, 1, mean),
-      SE = apply(samples, 1, sd),
-      CI_low = round(apply(samples, 1, function (x) { quantile(x,probs=low_prob, na.rm=TRUE) }),5),
-      CI_high = round(apply(samples, 1, function (x) { quantile(x,probs=high_prob, na.rm=TRUE) }),5)
-    )
-
-    bootstrapped_data <- mutate(bootstrapped_data,
-                                Significant = ifelse((CI_high > 0 & CI_low > 0) | (CI_high < 0 & CI_low < 0), TRUE, FALSE))
+    
+    data_gathered <- tidyr::gather_(data,key_col = "Sample", value_col = "Val", 
+                                      gather_cols = paste0("Sample", 1:bootstrap_attr$samples ) )
+    data_summarized <- summarize(.data = group_by(Time, .data = data_gathered),
+                                   MeanDiff = mean(Val, na.rm=TRUE),
+                                   SE = sd(Val, na.rm=TRUE),
+                                   CI_low  = quantile(Val, probs = low_prob, na.rm=TRUE),
+                                   CI_high = quantile(Val, probs = high_prob, na.rm=TRUE),
+                                   Statistic = .get_nonparametric_stat(Val, 0))
+    bootstrapped_data <- mutate(ungroup(data_summarized),
+                                Significant = (CI_high > 0 & CI_low > 0) | (CI_high < 0 & CI_low < 0) )
   }
   else {
-    samples <- bootstrap_attr$samples
-
-    # randomly resample 1 mean from each condition and subtract them to get a
-    # distribution of the difference between means
-    bootstrapped_diffs <- data.frame(matrix(nrow=length(unique(data[, 'Time'])), ncol=bootstrap_attr$samples + 1))
-    colnames(bootstrapped_diffs) <- c('Time', paste0('Diff',1:samples))
-
-    get_mean_diffs <- function(samples, mean_dist_1, mean_dist_2) {
-      return (sample(mean_dist_1,samples,replace=T) - sample(mean_dist_2,samples,replace=T))
-    }
-
-    # lay the 2 conditions side-by-side in a matrix
-    horizontal_matrix <- cbind(data[1:(nrow(data)/2), c('Time',paste0('Sample',1:bootstrap_attr$samples))], data[((nrow(data)/2)+1):nrow(data), paste0('Sample',1:bootstrap_attr$samples)])
-
-    # sample diffs between random means to generate a distribution of differences
-    sampled_mean_diffs <- apply(horizontal_matrix, 1, function(x) { get_mean_diffs(1000, x[2:(length(x) / 2)], x[((length(x) / 2)+1):length(x)]) })
-    sampled_mean_diffs <- t(sampled_mean_diffs)
-
-    # calculate means and CIs
-    bootstrapped_data <- data.frame(
-      Time = horizontal_matrix$Time,
-      MeanDiff = as.vector(apply(sampled_mean_diffs, 1, mean, na.rm=TRUE)),
-      SE = as.vector(apply(sampled_mean_diffs, 1, sd, na.rm=TRUE)),
-      CI_low = as.vector(round(apply(sampled_mean_diffs, 1, function (x) { quantile(x,probs=low_prob, na.rm=TRUE) }),5)),
-      CI_high = as.vector(round(apply(sampled_mean_diffs, 1, function (x) { quantile(x,probs=high_prob, na.rm=TRUE) }),5))
-    )
-
-    bootstrapped_data <- mutate(bootstrapped_data,
-                                Significant = ifelse((CI_high > 0 & CI_low > 0) | (CI_high < 0 & CI_low < 0), TRUE, FALSE))
+    
+    data_gathered <- tidyr::gather_(data, key_col = "Sample", value_col = "Val", 
+                                      gather_cols = paste0("Sample", 1:bootstrap_attr$samples ))
+    data_spread <- tidyr::spread_(data_gathered, key_col = bootstrap_attr$predictor_column, value_col = "Val")
+    colnames(data_spread)[3:4] <- c('Lvl1','Lvl2')
+    data_spread$Val <- with(data_spread, Lvl1-Lvl2)
+    
+    data_summarized <- summarize(.data = group_by(Time, .data = data_spread),
+                                 MeanDiff = mean(Val, na.rm=TRUE),
+                                 SE = sd(Val, na.rm=TRUE),
+                                 CI_low  = quantile(Val, probs = low_prob, na.rm=TRUE),
+                                 CI_high = quantile(Val, probs = high_prob, na.rm=TRUE),
+                                 Statistic = .get_nonparametric_stat(Lvl1, Lvl2))
+    bootstrapped_data <- mutate(ungroup(data_summarized),
+                                Significant = (CI_high > 0 & CI_low > 0) | (CI_high < 0 & CI_low < 0) )
   }
 
   bootstrapped_data = as.data.frame(bootstrapped_data)

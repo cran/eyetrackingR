@@ -165,9 +165,13 @@ make_time_sequence_data <- function (data,
 
 #' analyze_time_bins()
 #'
-#' Runs a test on each time-bin of \code{time_sequence_data}. Supports \code{t.test}, \code{wilcox.test}, \code{lm}, and
-#' \code{lmer}. By default, uses 'proportion-looking' (\code{Prop}) as the DV, which can be changed by manually specifying the formula.
-#' Results can be plotted to see how test-results or parameters estimates vary over time.
+#' Runs a test on each time-bin of \code{time_sequence_data}. Supports \code{t.test},
+#' \code{wilcox.test}, \code{(g)lm}, and \code{(g)lmer}. Also includes support for
+#' the "bootstrapped-splines" test (see \code{?make_boot_splines_data} and 
+#' \href{http://www.eyetracking-r.com/vignettes/divergence}{the divergence vignette} for more info). 
+#' By default, this function uses 'proportion-looking' (\code{Prop}) as the DV, which can be changed
+#' by manually specifying the formula. Results can be plotted to see how test-results or parameters
+#' estimates vary over time. P-values can be adjusted for multiple comparisons with \code{p_adjust_method}.
 #' 
 #' @export
 analyze_time_bins = function(data, ...) {
@@ -180,13 +184,18 @@ analyze_time_bins = function(data, ...) {
 #'   interested in a predictor, but the intercept, you can enter "intercept" for this argument.
 #'   Interaction terms are not currently supported.
 #' @param test              What type of test should be performed in each time bin? Supports 
-#'   \code{t.test}, \code{wilcox.test}, \code{lm}, and \code{lmer}.
+#'   \code{t.test}, \code{wilcox.test}, \code{(g)lm}, and \code{(g)lmer}. Also includes support for
+#' the "bootstrapped-splines" test (see \code{?make_boot_splines_data} and 
+#' \href{http://www.eyetracking-r.com/vignettes/divergence}{the divergence vignette} for more info).
 #' @param threshold         Value of statistic used in determining significance
 #' @param alpha             Alpha value for determining significance, ignored if threshold is given
+#' @param aoi               Which AOI should be analyzed? If not specified (and dataframe has multiple AOIs), 
+#'                          then AOI should be a predictor/covariate in your model (so `formula` needs 
+#'                          to be specified).
 #' @param formula           What formula should be used for the test? Optional for all but
-#'   \code{lmer}, if unset will use \code{Prop ~ [predictor_column]}. Change this to use a custom DV.
-#' @param return_model      In the returned dataframe, should a model be given for each time bin, or
-#'   just the summary of those models?
+#'   \code{(g)lmer}, if unset will use \code{Prop ~ [predictor_column]}. Change this if you want to use a custom DV.
+#' @param p_adjust_method   Method to adjust p.values for multiple corrections (default="none"). 
+#'                          See \code{p.adjust.methods}.
 #' @param quiet             Should messages and progress bars be suppressed? Default is to show
 #' @param ...               Any other arguments to be passed to the selected 'test' function (e.g.,
 #'   paired, var.equal, etc.)
@@ -214,66 +223,72 @@ analyze_time_bins.time_sequence_data <- function(data,
                               predictor_column,
                               test,
                               threshold = NULL,
-                              alpha = .05,
+                              alpha = NULL,
+                              aoi = NULL,
                               formula = NULL,
-                              return_model = FALSE,
+                              p_adjust_method = "none",
                               quiet = FALSE,
                               ...)
 {
-
+  
   ## Helper:
   .fix_unpaired = function(data, data_options, predictor_column, dv) {
     if (!is.factor(data[[predictor_column]])) stop("Your condition column should be a factor.")
     lvl1 <- levels(data[[predictor_column]])[1]
     df_no_na   <- filter_(data, interp(~!is.na(DV), DV = as.name(dv)))
-    summarized_by <- attr(data, "eyetrackingR")$summarized_by
+    summarized_by <- c("Time", attr(data, "eyetrackingR")$summarized_by)
     df_grouped <- group_by_(df_no_na, .dots = summarized_by)
     df_mutated <- mutate_(df_grouped,
-                          .dots = list(PairedObs = interp(~length(which(COND_COL == lvl1)) > 0 & length(which(COND_COL != lvl1)) > 0,
-                                                          COND_COL = as.name(predictor_column)))
+                          .dots = list(PairedObs = interp(
+                             ~length(which(COND_COL == lvl1)) > 0 & 
+                              length(which(COND_COL != lvl1)) > 0,
+                            COND_COL = as.name(predictor_column)))
     )
     df_filtered <- filter(df_mutated, PairedObs)
     ungroup(df_filtered)
   }
 
-  # Prelims:
+  # Data info:
   data_options <- attr(data, "eyetrackingR")$data_options
-  if (grepl("intercept", predictor_column, ignore.case = TRUE)) {
-    if (is.null(formula)) stop("If testing intercept, please manually specify formula")
-    predictor_column <- "(Intercept)"
-  }
-  if (is.null(data_options)) stop("Dataframe has been corrupted.") # <----- TO DO: fix later
-  if (!requireNamespace("pbapply", quietly = TRUE)) {
-    pblapply <- lapply
-    if (!quiet) message("Install package 'pbapply' for a progress bar in this function.")
-  } else {
-    pblapply <- pbapply::pblapply
-  }
-  test <- match.arg(test, c("t.test","wilcox.test","lm","lmer"))
-  if (!requireNamespace("lme4", quietly = TRUE)) {
-    if (test == "lmer") stop("Please install and load the 'lme4' package to use this method.")
+  if (is.null(data_options)) stop("Dataframe has been corrupted.") # <----- TO DO: more informative?
+  dots <- lazyeval::lazy_dots(...)
+  
+  # Need either alpha or threshold:
+  if (!is.null(threshold) & !is.null(alpha)) stop("Please only specify alpha or threshold, not both.")
+  if (is.null(threshold) & is.null(alpha)) stop("Please specify either alpha or threshold.")
+  if (is.null(alpha)) {
+    if (test %in% c('boot_splines', 'wilcox.test')) stop("This test requires `alpha` rather than `threshold`.")
   }
 
-  # For Multiple aois:
-  if (!'AOI' %in% colnames(data)) stop("'AOI' column is missing from data.")
-  aois <- unique(data[['AOI']])
-  if ( length(aois) > 1 ) {
-    list_of_dfs <- lapply(X = aois, FUN = function(this_aoi) {
-      if (!quiet) message("Analyzing ", this_aoi, "...")
-      this_df <- filter(data, AOI == this_aoi)
-      class(this_df) = class(data)
-      analyze_time_bins(data = this_df, predictor_column=predictor_column, test=test, 
-        threshold=threshold, alpha=alpha, formula=formula, return_model=return_model, quiet = quiet, ... = ...)
-    })
-    out <- bind_rows(list_of_dfs)
-    out <- as.data.frame(out)
-    class(out) = c('bin_analysis', class(out))
-    attr(out,"eyetrackingR") <- list(formula= formula)
-    return( out )
+  # Which Test?:
+  test <- match.arg(test, c("t.test","wilcox.test","lm","lmer","glm","glmer","boot_splines"))
+  if (!requireNamespace("lme4", quietly = TRUE)) {
+    if (test %in% c("lmer","glmer")) stop("Please install the 'lme4' package to use this method.")
   }
+
+  # Multiple aois:
+  if (!'AOI' %in% colnames(data)) stop("'AOI' column is missing from data.")
+  unique_aois <- unique(data[['AOI']])
+  if ( length(unique_aois) > 1 ) {           # DF has more than one AOI...
+    if (is.null(aoi)) {                      # they haven't specified which is of interest
+      if (predictor_column != "AOI") {       # its not the main predictor....
+        if (!is.null(formula)) {             # they did specify a formula
+          if (!grepl(pattern = 'AOI', x = deparse(formula))) {
+            warning("There are multiple AOIs in your data frame, but your model does not use AOI as a predictor/covariate!",
+                    immediate. = TRUE)
+          }                                  # the formula has AOI-- no problem
+        } else {                             # they did NOT specify a formula
+          stop("If multiple AOIs in data, and `aoi` argument not specified, then you must manually specify a formula.")
+        } 
+      }                                      # predictor column *was* AOI-- no problem.
+    } else {                                 # they *did* specify which AOI is of interest
+      data <- filter(data, AOI == aoi)
+      if (nrow(data)==0) stop("AOI not found in data.")
+    }
+  } 
 
   # Check that data is collapsed (by e.g. participants):
-  if (test != "lmer") {
+  if (!test %in% c("lmer","glmer")) {
     attrs <- attr(data, "eyetrackingR")
     summarized_by <- attrs$summarized_by
     if (is.null(summarized_by)) stop(test, " requires summarized data. ",
@@ -281,164 +296,192 @@ analyze_time_bins.time_sequence_data <- function(data,
                                      " (e.g., the participant column).")
   }
 
-  # auto-make a formula, unless they specified one
-  if (is.null(formula)) {
-    if (test=="lmer") stop("Must specify a formula if using lmer.")
+  # Formula Checks:
+  if (grepl("intercept", predictor_column, ignore.case = TRUE)) {
+    if (is.null(formula)) stop("If testing intercept, please manually specify formula")
+    predictor_column <- "(Intercept)"
+  }
+  if (is.null(formula)) { # auto-make a formula, unless they specified one
+    if (test%in% c("lmer","glmer")) stop("Must specify a formula if using (g)lmer.")
     formula <- as.formula(paste("Prop ~", predictor_column))
     dv <- "Prop"
   } else {
     dv <- gsub(formula[2], pattern = "()", replacement = "", fixed = TRUE)
   }
-
+  
   # Run a model for each time-bin
-  cc <- lazyeval::lazy_dots(...)
-  paired <- eval(cc[["paired"]]$expr)
-  if (!quiet) message("Computing ", test, " for each time bin...")
-  if (test=="lmer") {
-    the_test <- .make_function_fail_informatively(lme4::lmer)
-  } else {
-    the_test <- .make_function_fail_informatively(get(test))
-  }
-  if (quiet) pblapply <- lapply
-  the_errors <- list()
-  the_warnings <- list()
-  models= pblapply(unique(data$Time), function(tb) {
-
-    # get data:
-    temp_dat <- filter(data, Time==tb)
-    # Make paired test more robust to unpaired observations within a bin:
-    if (identical(paired, TRUE)) temp_dat <- .fix_unpaired(temp_dat, data_options, predictor_column, dv)
+  if (test!="boot_splines") {
+    if (!quiet) message("Computing ", test, " for each time bin...")
     
-    # make model:
-    output <- suppressWarnings( the_test(formula = formula, data = temp_dat, ... = ...) )
+    # Fix unpaired (only t.test/wilcox):
+    paired <- eval(dots[["paired"]]$expr)
+    if (identical(paired, TRUE) & test %in% c("t.test", "wilcox.test")) {
+      # for paired t-tests, need to remove unpaired observations for each TB
+      data <- .fix_unpaired(data, data_options, predictor_column, dv)
+    }
     
-    # If error, log and return NA
-    if (!is.null(output$err)) {
-      the_errors[[as.character(tb)]] <<- output$err
-      return(NA)
-    } 
-    # If warning, just log 
-    if (!is.null(output$warn)) {
-      the_warnings[[as.character(tb)]] <<- output$warn
+    # Get Testing Function
+    if (test %in% c("lmer","glmer")) {
+      the_func <- .make_function_fail_informatively(get(test, envir = getNamespace("lme4")))
+    } else {
+      the_func <- .make_function_fail_informatively(get(test))
     }
-    # Return model:
-    return(output[[1]])
     
-  })
-  
-  # Give Errors:
-  if (length(the_errors) > 1) {
-    error_types <- unique(unlist(lapply(the_errors, unique)))
-    error_lists <- list()
-    for (error_type in error_types) {
-      error_lists[[error_type]] <- unlist(lapply(names(the_errors), function(tb) {
-        if (error_type %in% the_errors[[tb]]) {
-          return(tb)
-        } else {
-          return(NULL)
-        }
-      }))
-    }
-    for (i in seq_along(error_lists)) {
-      error_list <- error_lists[[i]]
-      warning("\nFor the following timebins...\n\t", paste(sort(error_list), collapse = ", "),
-              "\n...received the following error message(s): \n\t`", error_types[i], "`",
-              "\nThis means something went wrong when running ", test, " on these timebins. ",
-              "Model results for these timebins have been replaced by `NA` in the output.\n")
-      if (grepl(pattern = "not found", x = error_types[i])) stop(error_types[i])
-    }
-  }
-  
-  # Give Warnings:
-  if (length(the_warnings) > 1) {
-    warning_types <- unique(unlist(lapply(the_warnings, unique)))
-    warning_lists <- list()
-    for (warning_type in warning_types) {
-      warning_lists[[warning_type]] <- unlist(lapply(names(the_warnings), function(tb) {
-        if (warning_type %in% the_warnings[[tb]]) {
-          return(tb)
-        } else {
-          return(NULL)
-        }
-      }))
-    }
-    for (i in seq_along(warning_lists)) {
-      warning_list <- warning_lists[[i]]
-      warning("\nFor the following timebins...\n\t", paste(sort(warning_list), collapse = ", "),
-              "\n...received the following warning message: \n\t`", warning_types[i], "`\n")
-    }
-  }
-  
-  # Get Statistic:
-  if (test=="lmer") {
-    tidied_models <- suppressWarnings(lapply(models, broom::tidy, effects="fixed"))
-  } else {
-    tidied_models <- suppressWarnings(lapply(models, broom::tidy))
-  }
-  if (test %in% c('t.test','wilcox.test')) {
-    models_statistics <- sapply(tidied_models, function(x) ifelse('statistic' %in% names(x), x[,'statistic'], NA) )
-    models_estimates  <- sapply(tidied_models, function(x) ifelse('estimate' %in% names(x), x[,'estimate'], NA) )
-    
-    # no std. error provided, so grab it from CI
-    models_std_err  <- sapply(tidied_models, function(x) ifelse(all(c('conf.low','conf.high') %in% names(x)), (x[,'conf.high']-x[,'conf.low'])/(1.96*2), NA) )
-  } else {
-    model_row <- lapply(tidied_models, function(x) {
-      which_row <- grep(pattern = predictor_column, x = x[['term']], fixed = TRUE) # look for partially matching param (for treatment coding)
-      if (length(which_row)==1) {
-        return(x[which_row, ])
+    # Create Test/Summarize function, which also catches errors:
+    the_test <- function(...) {
+      res_err_warn <- the_func(...)
+      if (test %in% c("lmer","glmer")) {
+        out <- broom::tidy(res_err_warn$res, effects = 'fixed')
       } else {
-        # too many matches? look for exact match (happens with continous predictor)
-        which_row <- which(x[['term']] == predictor_column)
-        if (length(which_row)==1) return(x[which_row, 'statistic'])
-        warning("Could not find the parameter '",predictor_column,"' in your model. Found instead: ", paste(x[['term']], collapse=", ") )
-        return(NA)
+        out <- broom::tidy(res_err_warn$res)
       }
-    } )
-    
-    models_statistics <- sapply(model_row, function(x) x[,"statistic"])
-    models_estimates  <- sapply(model_row, function(x) x[,"estimate"])
-    models_std_err    <- sapply(model_row, function(x) x[,"std.error"])
-  }
-
-
-  # Find Critical Value:
-  if (is.null(threshold)) {
-    if (test == "lmer") {
-      if (!quiet) message("Using the normal approximation for critical value on parameter in lmer.")
-      crit_pos =  qnorm(p=1-alpha/2)
-      crit_neg = -qnorm(p=1-alpha/2)
-    } else if (test=="t.test") {
-      dfs <- sapply(tidied_models, function(x) ifelse('parameter' %in% names(x), x[,'parameter'], NA))
-      crit_pos <- qt(1-alpha/2, df = dfs)
-      crit_neg <- -crit_pos
-    } else if (test=="wilcox.test") {
-      sample_sizes <- sapply(models, function(x) x$sample_size)
-      crit_pos <- qsignrank(p = 1-alpha/2, n = sample_sizes )
-      crit_neg <- -crit_pos
-    } else if (test=="lm") {
-      sample_sizes <- sapply(models, function(x) x$sample_size)
-      crit_pos <- qt(1-alpha/2, df = sample_sizes-1)
-      crit_neg <- -crit_pos
+      
+      if (length(res_err_warn$err)>0) {
+        df_err <- as.data.frame( do.call(cbind, as.list(res_err_warn$err)) )
+        colnames(df_err) <- paste0("ErrorMsg", seq_along(res_err_warn$err))
+        out <- df_err
+      } else {
+        # need to manually extract degrees of freedom for some tests
+        # (not needed if func resulted in error)
+        if (test %in% c("lm","glm")) out$parameter <- df.residual(res_err_warn$res)
+      }
+      
+      if (length(res_err_warn$warn)>0) {
+        df_warn <- as.data.frame( do.call(cbind, as.list(res_err_warn$warn)) )
+        colnames(df_warn) <- paste0("WarningMsg", seq_along(res_err_warn$warn))
+        df_warn <- bind_rows( lapply(X = 1:nrow(out), FUN = function(x) df_warn) )
+        out <- bind_cols(out, df_warn)
+      }
+      
+      out
     }
-  } else {
-    crit_pos <- ifelse(sign(threshold)==1,  threshold, -threshold)
-    crit_neg <- ifelse(sign(threshold)==1, -threshold,  threshold)
+    
+    # Run models:
+    df_models <- data %>%
+      group_by(Time) %>%
+      do(the_test(formula = formula, data = ., ... = ...)) %>%
+      as.data.frame()
+    
+    # Warn about warnings
+    warn_cols <- grep("WarningMsg", colnames(df_models))
+    if ( length(warn_cols)>0 ) {
+      if (!quiet) message("At least one time-bin produced warnings--be sure to check 'Warning' col in output.")
+      for (col in warn_cols) {
+        unique_msgs <- unique(as.character(df_models[,col]))
+        if (length(unique_msgs)==1) warning("All time-bins produced the same warning: '", unique_msgs, "'")
+      }
+    }
+    err_cols <- grep("ErrorMsg", colnames(df_models))
+    if ( length(err_cols)>0 ) {
+      if (!quiet) message("At least one time-bin produced errors--be sure to check 'Error' col in output.")
+      for (col in err_cols) {
+        unique_msgs <- unique(as.character(df_models[,col]))
+        if (length(unique_msgs)==1) stop("All time-bins produced same error: '", unique_msgs, "'")
+      }
+    }
+    
+    # Make model specifications the same for all test-types:
+    if (test == "t.test") {
+      df_models$std.error <- with(df_models, (conf.high-conf.low)/(1.96*2))
+      if (!identical(paired, TRUE)) df_models$estimate <- df_models$estimate1 - df_models$estimate2
+    } else if (test %in% c('glmer', 'lmer')) {
+      if (!quiet) message("Using the normal approximation for p-value on parameter in ", test,".") 
+      df_models$p.value <- with(df_models, 2*pnorm(q = abs(statistic), lower.tail = FALSE))
+      df_models$parameter <- NA
+    } else if (test == "wilcox.test") {
+      df_models$statistic <- NA
+      df_models$std.error <- NA
+      df_models$estimate <- NA
+      df_models$parameter <- NA
+    }
+
+    # Find Critical Value:
+    if (is.null(threshold)) {
+      df_models$CritStatisticPos <- .get_threshold(alpha, test, df_models$parameter, quiet)
+    } else {
+      df_models$CritStatisticPos <- ifelse(sign(threshold)==1,  threshold, -threshold)
+    }
+    df_models$CritStatisticNeg <- -df_models$CritStatisticPos
+    
+    # Filter Param-of-Interest:
+    if (test %in% c('t.test', 'wilcox.test')) {
+      df_models_this_param <- df_models
+    } else {
+      df_models_this_param <- filter(df_models, term == predictor_column)
+      if (nrow(df_models_this_param)==0) {
+        terms <- paste0("'", unique(df_models$term), "'", collapse= ", ")
+        msg <- paste0("\nThe term '", predictor_column, "' was not found in your model. \nFound instead: ", terms)
+        stop(msg)
+      }
+    }
+    
+    # Generate Output:
+    new_cols <- list(Estimate = quote(estimate), 
+                     StdErr = quote(std.error), 
+                     Statistic = quote(statistic), 
+                     Prob = quote(p.value), 
+                     DF = quote(parameter),
+                     quote(Time), quote(CritStatisticPos), quote(CritStatisticNeg) 
+    )
+    new_cols <- append(new_cols, grep("WarningMsg", colnames(df_models), value = TRUE))
+    new_cols <- append(new_cols, grep("ErrorMsg", colnames(df_models), value = TRUE))
+    out <- select_(.data = df_models_this_param, .dots = new_cols)
+
+  } else if (test=="boot_splines") {
+
+    # arg-check:
+    if (is.null( dots$within_subj$expr )) stop("Method 'boot_splines' requires you specify `within_subj`.")
+    
+    # Make Boot Splines:
+    bs_samples <- eval(dots$bs_samples$expr)
+    if (is.null(bs_samples)) {
+      if (!is.null(dots$samples$expr)) {
+        bs_samples <- eval(dots$samples$expr)
+        warning("The 'samples' argument is deprecated in boot-splines, please use 'bs_samples' in the future.", 
+                call. = FALSE)
+      }
+    }
+    the_args <- list(data = data, predictor_column = predictor_column, aoi = aoi, alpha = alpha)
+    for (this_arg in names(dots)) {
+      the_args[[this_arg]] <- dots[[this_arg]]$expr
+    }
+    the_args[["bs_samples"]] <- ifelse(is.null(bs_samples), 1000, bs_samples)
+    bs_dat <- do.call(make_boot_splines_data, the_args)
+    
+    # Get Estimates:
+    bs_anal <- analyze_boot_splines(bs_dat)
+    
+    out <- select(bs_anal, 
+                  Time, Estimate = MeanDiff, StdErr = SE, Statistic, Significant, ConfLow = CI_low, ConfHigh = CI_high)
+    out <- mutate(out,
+                  Prob = NA, 
+                  DF = NA,
+                  CritStatisticNeg =  NA, 
+                  CritStatisticPos =  NA)
+    
+  }
+  
+  # Adjust P-val.
+  if (p_adjust_method != "none") {
+    if (test == "boot_splines") stop("The p_adjust_method must be 'none' for boot-splines test.")
+    if (is.null(alpha)) stop("If specifying p-value adjustment, must give alpha, not threshold.")
+    out$Prob <- p.adjust(p = out$Prob, method = p_adjust_method)
+    out$CritStatisticNeg <- out$CritStatisticPos <- NA
   }
 
-  # Return DataFrame:
-  out <- data.frame(stringsAsFactors = FALSE,
-                    Estimate = models_estimates,
-                    StdErr = models_std_err,
-                    Statistic = models_statistics,
-                    CritStatisticPos = crit_pos,
-                    CritStatisticNeg = crit_neg,
-                    Time = unique(data$Time)) # same order as for loop that built models
-  out$AOI <- data$AOI[1]
-  if (return_model) out$Model <- models
-  
   # Compute Information about Runs:
-  out$PositiveRuns <- .label_consecutive(out$Statistic>out$CritStatisticPos)
-  out$NegativeRuns <- .label_consecutive(out$Statistic<out$CritStatisticNeg)
+  if (test == "boot_splines") {
+    out$PositiveRuns <- .label_consecutive( out$Significant & out$Statistic>0 )
+    out$NegativeRuns <- .label_consecutive( out$Significant & out$Statistic<0 )
+  } else {
+    if (is.null(alpha)) {
+      out$PositiveRuns <- .label_consecutive(out$Statistic>out$CritStatisticPos)
+      out$NegativeRuns <- .label_consecutive(out$Statistic<out$CritStatisticNeg)
+    } else {
+      out$PositiveRuns <- .label_consecutive((alpha>out$Prob) & out$Statistic>0)
+      out$NegativeRuns <- .label_consecutive((alpha>out$Prob) & out$Statistic<0)
+    }
+  }
   
   positive_runs = lapply(unique(na.omit(out$PositiveRuns)), function(run) {
     list(start_time = with(out, min(Time[which(PositiveRuns==run)], na.rm=TRUE)),
@@ -457,6 +500,9 @@ analyze_time_bins.time_sequence_data <- function(data,
   attr(out,"eyetrackingR") <- c(
     attr(data, "eyetrackingR"),
     list(formula= formula,
+         p_adjust_method = p_adjust_method,
+         alpha = alpha,
+         threshold = threshold,
          test = test,
          predictor = predictor_column,
          positive_runs = positive_runs,
@@ -481,7 +527,7 @@ summary.bin_analysis <- function(object, ...) {
   df_neg <- bind_rows(lapply(attrs$negative_runs, as.data.frame))
   
   p1 <- paste("Test Type:\t", attrs$test,
-              "\nPredictor:\t", attrs$predictor_column,
+              "\nPredictor:\t", attrs$predictor,
               "\nFormula:\t", Reduce(paste, deparse(attrs$formula)),
               "\nRuns of Significant Time Bins:")
   if (length(positive_runs) > 0) {
@@ -627,31 +673,90 @@ plot.time_sequence_data <- function(x, predictor_column = NULL, dv='Prop', model
 #' Plot the result from the \code{analyze_time_bins} function, with the statistic and threshold for each bin
 #' 
 #' @param x The output of \code{analyze_time_bins}
-#' @param type Plot the test-statistic at each time bin ("statistic"), or the parameter estimate at each time
-#'   bin ("estimate")? Note that estimate plots standard error, regardless of the alpha/threshold used originally
+#' @param type This function can plot the test-statistic ("statistic"), the parameter estimate +/-
+#'   std. error ("estimate"), the p-value ("pvalue") or the negative-log-pvalue ("neg_log_pvalue").
+#'   When test gives critical-statistic, default is to plot the test-statistic. Otherwise, default
+#'   is to plot the estimate. For wilcox, only p-values can be plotted.
 #' @param ... Ignored
 #' @export
 #' @return A ggplot object
-plot.bin_analysis <- function(x, type = "statistic", ...) {
+plot.bin_analysis <- function(x, type = NULL, ...) {
   
-  type = match.arg(type, c("statistic", "estimate"))
+  p_adjust_method <- attr(x, "eyetrackingR")$p_adjust_method
+  test <- attr(x, "eyetrackingR")$test
   
+  # if crit-statistic is valid, default plot statistic
+  # if not (boot-splines, wilcox, p-adjust), then default plot estimate
+  
+  if (p_adjust_method != "none") {
+    if (is.null(type)) type <- "estimate"
+    if (type == "statistic") message("Cannot compute critical value when p-value adjustment is used.")
+  } else if (test == "boot_splines") {
+    if (is.null(type)) type <- "estimate"
+    if (type %in% c('pvalue','neg_log_pvalue')) stop("Boot-splines test does not produce p-values.")
+  } else if (test == "wilcox.test") {
+    if (is.null(type)) type <- "neg_log_pvalue"
+    if (type %in% c("statistic", "estimate")) stop("Can only plot p-values for wilcox test.")
+  } else {
+    if (is.null(type)) type <- "statistic"
+  }
+  
+  type <- match.arg(type, c("statistic", "estimate", "pvalue", "neg_log_pvalue"))
+
   if (type == "statistic") {
     g <- ggplot(data = x) +
       geom_line(mapping = aes(x = Time, y= Statistic)) +
-      geom_line(mapping = aes(x = Time, y= CritStatisticPos), linetype="dashed") +
-      geom_line(mapping = aes(x = Time, y= CritStatisticNeg), linetype="dashed") +
-      ylab("Statistic") +
-      xlab("Time") 
-    if (length(unique(x$AOI))>1) g <- g + facet_wrap( ~ AOI)
-  } else {
-    g <- ggplot(data = x, mapping = aes(x = Time, y= Estimate)) +
-      geom_line() +
-      geom_ribbon(mapping = aes(ymin = Estimate - StdErr, ymax = Estimate + StdErr), alpha=.33) + 
+      ylab("Statistic") 
+    if (p_adjust_method == "none" & test != "boot_splines") {
+      g <- g + 
+        geom_line(mapping = aes(x = Time, y= CritStatisticPos), linetype="dashed") +
+        geom_line(mapping = aes(x = Time, y= CritStatisticNeg), linetype="dashed")
+    } 
+  } else if (type == "estimate") {
+    g <- ggplot(data = x) +
+      geom_line(mapping = aes(x = Time, y= Estimate)) +
+      geom_ribbon(mapping = aes(x = Time, ymin = Estimate - StdErr, ymax = Estimate + StdErr), alpha=.33) + 
       geom_hline(yintercept = 0, linetype="dashed") +
-      ylab("Parameter Estimate") +
-      xlab("Time") 
-    if (length(unique(x$AOI))>1) g <- g + facet_wrap( ~ AOI)
+      ylab("Parameter Estimate (+/-Std.Err)") 
+  } else if (type == "pvalue") {
+    alpha <- attr(x, "eyetrackingR")$alpha
+    g <- ggplot(data = x) + 
+      geom_line(mapping = aes(x = Time, y = Prob)) +
+      coord_cartesian(ylim=c(0,1)) + ylab("P Value") 
+    if (!is.null(alpha)) {
+      g <- g + geom_hline(yintercept = alpha, linetype="dashed")
+    }
+  } else if (type == "neg_log_pvalue") {
+    alpha <- attr(x, "eyetrackingR")$alpha
+    g <- ggplot(data = x) + 
+      geom_line(mapping = aes(x = Time, y = -log(Prob)) ) +
+      ylab("-Log(P Value)") 
+    if (!is.null(alpha)) {
+      g <- g + geom_hline(yintercept = -log(alpha), linetype="dashed")
+    }
   }
-  return(g)
+  if (length(unique(x$AOI))>1) g <- g + facet_grid(. ~ AOI, labeller = "label_both")
+  
+  # Shade significant runs:
+  negative_runs <- data.frame(
+    Start = sapply(attr(x, "eyetrackingR")$negative_runs, function(run) run$start_time),
+    Stop  = sapply(attr(x, "eyetrackingR")$negative_runs, function(run) run$stop_time)
+  )
+  if (nrow(negative_runs)>0) {
+    g <- g + geom_rect(data = negative_runs, fill= "blue", alpha = .20, 
+                       mapping = aes(xmin = Start, xmax = Stop, 
+                                     ymin = -Inf, ymax= Inf))
+  }
+  positive_runs <- data.frame(
+    Start = sapply(attr(x, "eyetrackingR")$positive_runs, function(run) run$start_time),
+    Stop  = sapply(attr(x, "eyetrackingR")$positive_runs, function(run) run$stop_time)
+  )
+  if (nrow(positive_runs)>0) {
+    g <- g +
+      geom_rect(data = positive_runs, fill= "blue", alpha = .20, 
+                mapping = aes(xmin = Start, xmax = Stop, 
+                              ymin = -Inf, ymax= Inf))
+  }
+
+  return(g+xlab("Time"))
 }

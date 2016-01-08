@@ -10,7 +10,7 @@
 
 <meta name="author" content="Jacob Dink &amp; Brock Ferguson" />
 
-<meta name="date" content="2015-11-15" />
+<meta name="date" content="2016-01-08" />
 
 <title>Preparing your data for use with eyetrackingR</title>
 
@@ -72,7 +72,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <div id="header">
 <h1 class="title">Preparing your data for use with eyetrackingR</h1>
 <h4 class="author"><em>Jacob Dink &amp; Brock Ferguson</em></h4>
-<h4 class="date"><em>2015-11-15</em></h4>
+<h4 class="date"><em>2016-01-08</em></h4>
 </div>
 
 
@@ -218,9 +218,9 @@ data &lt;-<span class="st"> </span><span class="kw">add_aoi</span>(<span class="
 ## Variables not shown: TracklossForTrial (dbl), TracklossForParticipant
 ##   (dbl)</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">response_window_clean &lt;-<span class="st"> </span><span class="kw">clean_by_trackloss</span>(<span class="dt">data =</span> response_window, <span class="dt">trial_prop_thresh =</span> .<span class="dv">25</span>)</code></pre></div>
-<pre><code>## Performing Trackloss Analysis...
-## Will exclude trials whose trackloss proportion is greater than : 0.25
-##  ...removed  33  trials.</code></pre>
+<pre><code>## Performing Trackloss Analysis...</code></pre>
+<pre><code>## Will exclude trials whose trackloss proportion is greater than : 0.25</code></pre>
+<pre><code>##  ...removed  33  trials.</code></pre>
 </div>
 <div id="how-much-data-are-we-left-with" class="section level2">
 <h2>How much data are we left with?</h2>

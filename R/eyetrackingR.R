@@ -10,6 +10,8 @@
 #' @importFrom lazyeval interp
 #' @import ggplot2
 #' @import dplyr
+#' @importFrom tidyr  gather
+#' @importFrom tidyr  spread
 #' @importFrom stats  plogis
 #' @importFrom stats  qlogis
 #' @importFrom stats  rnorm
@@ -28,6 +30,11 @@
 #' @importFrom stats  qt
 #' @importFrom stats  quantile
 #' @importFrom stats  sd
+#' @importFrom stats  rgamma
+#' @importFrom stats  df.residual
+#' @importFrom stats  p.adjust
+#' @importFrom tidyr  gather
+#' @importFrom tidyr  spread
 #' @importFrom graphics plot
 #'
 #' @docType package
@@ -64,6 +71,12 @@ utils::globalVariables(c('Prop',
                          'SwitchAOI',
                          'Min',
                          'Max',
+                         "term",
+                         ".",
+                         "SE",
+                         "Significant",
+                         "Start",
+                         "Stop",
                          ".Time",
                          'FirstSwitch',
                          '.Predicted',
@@ -81,8 +94,12 @@ utils::globalVariables(c('Prop',
                          'Condition',
                          'NegativeRuns', 
                          'ParticipantLogOdds',
-                         'TrialLogOdds',
+                         'ItemLogOdds',
                          'Item',
                          'Participant',
                          'PositiveRuns',
-                         'Trial'))
+                         'Trial',
+                         'Lvl1',
+                         'Lvl2',
+                         'Prob',
+                         'Val'))

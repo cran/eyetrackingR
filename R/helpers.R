@@ -1,3 +1,23 @@
+#' .get_crit_val()
+#'
+#' Get the threshold, given critical value and test. For `analyze_time_bins`
+#'
+#' @param vec Logical
+#' @return A numeric vector
+.get_threshold <- function(alpha, test, dfs, quiet) {
+    if (test %in% c("lmer","glmer")) {
+      if (!quiet) message("Using the normal approximation for critical value on parameter in ", test)
+      crit_pos =  qnorm(p=1-alpha/2)
+    } else if (test=="t.test") {
+      crit_pos <- qt(1-alpha/2, df = dfs)
+    } else if (test=="wilcox.test") {
+      crit_pos <- NA
+    } else if (test=="lm" | test=="glm") {
+      crit_pos <- qt(1-alpha/2, df = dfs)
+    } 
+  return(crit_pos)
+}
+
 #' .label_consecutive()
 #'
 #' A helper function to label/enumerate runs of TRUEs in a logical vector, with NA for FALSEs
@@ -80,7 +100,7 @@
         warn <<- append(warn, conditionMessage(w))
         invokeRestart("muffleWarning")
       })
-    list(res, warn=warn, err=err)
+    list(res=res, warn=warn, err=err)
   }
 
 
@@ -98,30 +118,34 @@
 #'   preference). In the "low" condition, their preference between the two AOIs is equal, so default
 #'   is no effect of condition.
 #' @param pref_window             Vector of length two, specifying start and end of time-window in
-#'   which they expressed the preference specified in \code{pref}. Default is the entire trial
+#'   which participants expressed the preference specified in \code{pref}. Default is the entire trial
+#' @param noisy_window            Vector of length two, specifying start and end of time-window in
+#'   which there was substantial trackloss during the trial.
 #' @param ...                     Ignored
 #' @export
-#' @return Prints a list of divergence-times.
+#' @return Dataframe with eye-tracking data
 simulate_eyetrackingr_data <- function(num_participants= 16, 
                                        num_items_per_condition = 6, 
                                        trial_length = 5000, 
                                        pref =.50, 
                                        pref_window = c(1,trial_length),
+                                       noisy_window = NULL,
                                        ...) {
   
-  .generate_random_trial <- function(potential_switches_per_trial, pref, pref_onset) {
+  if (is.null(noisy_window)) noisy_window <- c(trial_length, trial_length)
+  
+  .generate_random_trial <- function(potential_switches_per_trial, pref, this_pref_wind, baseline_pref =.50) {
     
     # Randomly generate potential switch times via poisson process:
     switch_diffs_unnormed <- rexp(potential_switches_per_trial+1)
     switch_diffs_normed <- round((switch_diffs_unnormed/sum(switch_diffs_unnormed))*trial_len) +1 
     switch_diffs_normed <- switch_diffs_normed[1:potential_switches_per_trial]
-    switch_times_normed <- cumsum(switch_diffs_normed)
+    switch_times_normed <- cumsum(c(0,switch_diffs_normed))
     
     # Determine preference/which-aoi based on time in trial:
-    inside_pref_wind  <- (switch_times_normed>pref_onset & switch_times_normed<pref_wind[2])
-    aoi_vec_inside_window  <- rbinom(n = length(switch_times_normed), size = 1, prob = pref)
-    aoi_vec_outside_window <- rbinom(n = length(switch_times_normed), size = 1, prob = .5)
-    which_aoi <- ifelse(inside_pref_wind, aoi_vec_inside_window, aoi_vec_outside_window)
+    inside_pref_wind  <- (switch_times_normed>this_pref_wind[1] & switch_times_normed<this_pref_wind[2])
+    which_aoi <- rbinom(length(switch_times_normed), size = 1, 
+                        prob = ifelse(inside_pref_wind, yes = pref, no = baseline_pref))
     
     # Generate list of looks:
     out <- unlist(lapply(X = seq_along(switch_diffs_normed), FUN = function(i) rep(which_aoi[i], times = switch_diffs_normed[i])))
@@ -135,34 +159,39 @@ simulate_eyetrackingr_data <- function(num_participants= 16,
     rnorm(1, mean = avg_odds, sd = .50)
   }
   
+  noisy_wind <- noisy_window/10
   pref_wind <- pref_window/10 - 1
   pref_wind_len <- pref_wind[2] - pref_wind[1]
   trial_len = (trial_length/10) - 1
-  switchiness <- round(trial_len / 60)
+  switchiness <- round(trial_len / 60) # corresponds to roughly 8 possible switches in a 5-second window.
   
   dat <- data_frame(Participant = rep(1:num_participants, each = num_items_per_condition*trial_len) ) %>%
     group_by(Participant) %>%
     mutate(.NumSwitches = rpois(1, lambda = switchiness)+1,
-           .SpeedOffset = rnorm(1, sd = 5),
+           .SpeedOffset = rnorm(1, sd = 1/2),
            Trial = rep(1:num_items_per_condition, each = n() / num_items_per_condition),
            Item  = Trial,
            Condition = ifelse( (Participant%%2)==0, "High", "Low"),
            ParticipantLogOdds = ifelse(Condition == "High", .random_odds(qlogis(pref)), .random_odds(qlogis(.50)) ))  %>%
-    group_by(Trial) %>%
-    mutate(TrialLogOdds = ifelse(Condition == "High", .random_odds(qlogis(pref)), .random_odds(qlogis(.50)) )) %>%
-    group_by(Participant, Trial) %>%
+    group_by(Item) %>%
+    mutate(ItemLogOdds = ifelse(Condition == "High", .random_odds(qlogis(pref)), .random_odds(qlogis(.50)) )) %>%
+    group_by(Participant, Item) %>%
     mutate(TimeInTrial = (1:n())*10,
-           RT = rexp(1, rate = abs( (50+.SpeedOffset)^-1 ) )*10,# abs prevents error on 1 in a mil. chance it's negative
+           RT = rgamma(1, shape = 2, scale = 3+.SpeedOffset)*100, #rexp(1, rate = abs( (50+.SpeedOffset)^-1 ) )*10, 
            .PrefOnset = pref_wind[1] + RT/10,
            .PrefOnset = ifelse(.PrefOnset>pref_wind[2], pref_wind[2], .PrefOnset),
            AOI1 = .generate_random_trial(unique(.NumSwitches), 
-                                         pref = plogis( (unique(TrialLogOdds)+unique(ParticipantLogOdds))/2 ),
+                                         pref = plogis( (unique(ItemLogOdds)+unique(ParticipantLogOdds))/2 ),
                                          # each trial pref is avg of that item "pref" w/ that participant pref
-                                         pref_onset = unique(.PrefOnset)),
+                                         this_pref_wind = c(unique(.PrefOnset), pref_wind[2])),
                                          # each subject is delayed by a certain amount in when their preference emerges
                                         
            AOI2 = !AOI1,
-           Trackloss = as.logical(rbinom(n=n(), size=1, prob = .10)) ) %>%
+           Trackloss = .generate_random_trial(trial_len / 10, 
+                                             pref = .66,
+                                             this_pref_wind = noisy_wind,
+                                             baseline_pref = .10
+                                             ) ) %>%
     ungroup() %>% select(-.PrefOnset, -.NumSwitches, -.SpeedOffset) %>%
     mutate(Participant = factor(Participant),
            Condition = factor(Condition),

@@ -7,7 +7,7 @@
 #' @param data            The original (verified) data
 #' @param onset_time        When to check for participants' "starting" AOI?
 #' @param fixation_window_length       Which AOI is currently being fixated is determined by taking a rolling
-#'   average. This is the width of window for rolling average.
+#'   average of this length (ms). This is the width of window for rolling average.
 #' @param target_aoi      Which AOI is the target that should be switched *to*
 #' @param distractor_aoi  Which AOI is the distractor that should be switched *from* (default = !target_aoi)
 #'
@@ -25,15 +25,19 @@
 #'                                     rezero = FALSE)
 #' inanimate_trials <- subset(response_window, grepl('(Spoon|Bottle)', Trial))
 #' onsets <- make_onset_data(inanimate_trials, onset_time = 15500, 
-#'                           fixation_window_length = 100, target_aoi='Inanimate')
+#'                           fixation_window_length = 1, target_aoi='Inanimate')
 #' 
 #' @export
 #' @return Original dataframe augmented with column indicating switch away from target AOI
 make_onset_data <- function(data, onset_time, fixation_window_length, target_aoi, distractor_aoi = NULL) {
   ## Helper Function:
-  na_replace_rollmean <- function(col) {
-    col <- ifelse(is.na(col), 0, col)
-    zoo::rollmean(col, k = fixation_window_length_rows, partial=TRUE, fill= NA, align="left")
+  na_replace_rollmean <- function(col, fixation_window_length_rows) {
+    if ( sum(!is.na(col)) == 0 ) return(as.numeric(NA)) # no data
+    
+    out <- zoo::rollapply(col, FUN = mean, na.rm = TRUE, width = fixation_window_length_rows, partial = TRUE, 
+                          fill = NA, align = "left")
+    
+    return(out)
   }
 
   ## Prelims:
@@ -54,7 +58,7 @@ make_onset_data <- function(data, onset_time, fixation_window_length, target_aoi
     data[[distractor_aoi]] <- !data[[target_aoi]]
   }
   time_col <- as.name(data_options$time_column)
-
+  
   ## Translate TimeWindow units from time to number of rows (for rolling mean):
   df_time_per_row <- group_by_(data, .dots = c(data_options$participant_column, data_options$trial_column) )
   df_time_per_row <- summarize_(df_time_per_row,
@@ -62,36 +66,64 @@ make_onset_data <- function(data, onset_time, fixation_window_length, target_aoi
                                             ))
   time_per_row <- round(mean(df_time_per_row[["TimePerRow"]]))
   fixation_window_length_rows <- fixation_window_length / time_per_row
+  
+  if (fixation_window_length_rows > 1) {
+    warning('Smoothing in make_onset_data() using fixation_window_length_rows is experimental. We
+            recommend looking closely at the output to validate it.')
+  }
 
   ## Determine First AOI, Assign Switch Value for each timepoint
   
-  # Group by Ppt*Trial:
+  # Group by Participant*Trial:
   df_grouped <- group_by_(data, .dots = list(data_options$participant_column, data_options$trial_column) )
+  
+  # We assume data are in chronological order
+  df_grouped <- arrange_(df_grouped, .dots = list(data_options$time_column) )
 
   # Create a rolling-average of 'inside-aoi' logical for target and distractor, to give a smoother estimate of fixations
   df_smoothed <- mutate_(df_grouped,
-                        .dots = list(.Target    = interp(~na_replace_rollmean(TARGET_AOI), TARGET_AOI = as.name(target_aoi)),
-                                     .Distractor= interp(~na_replace_rollmean(DISTRACTOR_AOI), DISTRACTOR_AOI = as.name(distractor_aoi)),
+                        .dots = list(.Target    = interp(~na_replace_rollmean(TARGET_AOI, fixation_window_length_rows), TARGET_AOI = as.name(target_aoi)),
+                                     .Distractor= interp(~na_replace_rollmean(DISTRACTOR_AOI, fixation_window_length_rows), DISTRACTOR_AOI = as.name(distractor_aoi)),
                                      .Time      = interp(~TIME_COL, TIME_COL = time_col)
                                      ))
   
-  # For any trials where no data for onset timepoint is available, find the closest timepoint.
   # Calculate FirstAOI
+  # For any trials where no data for onset timepoint is available, find the closest timepoint.
   df_first_aoi <- mutate(df_smoothed,
-                        .ClosestTime = ifelse(length(which.min(abs(.Time - onset_time)))==1, .Time[which.min(abs(.Time - onset_time))], NA),
-                        # coerce results to character to avoid inconsistent response formats with ifelse when a match cannot be found and returns NA (logical)
-                        FirstAOI     = as.character(ifelse(.Target[.Time==.ClosestTime] > .Distractor[.Time==.ClosestTime], target_aoi, distractor_aoi))
+                         # these columns were useful for debugging:
+                         #.MinTimeIndex = as.numeric(ifelse(length(which.min(abs(.Time - onset_time))) == 1, which.min(abs(.Time - onset_time)), NA)),
+                         #.MinTime = as.numeric(ifelse(.MinTimeIndex, .Time[which.min(abs(.Time - onset_time))], NA)),
+                         #.TargetAtMinTime = as.numeric(.Target[.MinTimeIndex]),
+                         #.ClosestTime = as.numeric(ifelse(!is.na(.TargetAtMinTime) & !is.na(.MinTime), .MinTime, NA)),
+                         
+                         # .ClosestTime allows this function to work if people removed trackloss from their dataset, but otherwise
+                         # it serves no purpose
+                        .ClosestTime = as.numeric(ifelse(length(which.min(abs(.Time - onset_time)))==1 & !is.na(.Target[which.min(abs(.Time - onset_time))]),
+                                                        yes = .Time[which.min(abs(.Time - onset_time))],
+                                                        no = NA)),
+                        FirstAOI = as.character(ifelse(length(which(.Time==.ClosestTime))==1, 
+                                                       yes = ifelse(.Target[which(.Time==.ClosestTime)] >= .Distractor[which(.Time==.ClosestTime)], target_aoi, distractor_aoi),
+                                                       no  = NA))
+                        
+                        # if we didn't care about datasets that have entirely removed trackloss, we could use this function:
+                        #FirstAOI = as.character(ifelse(!is.na(.Target[which(.Time == onset_time)]),
+                        #                               yes = ifelse(.Target[which(.Time == onset_time)] >= .Distractor[which(.Time == onset_time)], target_aoi, distractor_aoi),
+                        #                               NA))
   )
+  
   df_first_aoi <- ungroup(df_first_aoi)
 
   # (1) If closest timepoint was too far away from onset window, record FirstAOI as unknown
   # (2) Set FirstAOI to NA if 'FirstAOI' returned NA (but was coerced to a character string) by previous mutate()
   # (3) Create a column specifying whether they have switched away from FirstAOI
   out <- mutate(df_first_aoi,
-         FirstAOI  = ifelse(abs(.ClosestTime-onset_time) > fixation_window_length | FirstAOI == 'NA', NA, FirstAOI),
-         WhichAOI  = ifelse(.Target > .Distractor, target_aoi, distractor_aoi),
-         SwitchAOI = FirstAOI != WhichAOI)
-  out <- select(out, -.Target, -.Distractor, -.Time, -.ClosestTime)
+         FirstAOI  = ifelse(!is.na(.ClosestTime) & abs(.ClosestTime-onset_time) <= fixation_window_length, FirstAOI, NA),
+         WhichAOI  = ifelse(!is.na(.Target) & !is.na(.Distractor) & .Target > .Distractor, target_aoi, ifelse(!is.na(.Target) & !is.na(.Distractor) & .Target < .Distractor, distractor_aoi, NA)),
+         SwitchAOI = ifelse(!is.na(WhichAOI), FirstAOI != WhichAOI, NA),
+         FirstAOI  = factor(FirstAOI),
+         WhichAOI  = factor(WhichAOI)
+    )
+  #out <- select(out, -.Target, -.Distractor, -.Time, -.ClosestTime)
   if (mean(is.na(out$FirstAOI)) > .5) warning("Very few trials have a legitimate first AOI! Possible incorrect onset time?")
 
   # Assign class information:
@@ -163,10 +195,13 @@ make_switch_data.onset_data <- function(data, predictor_columns=NULL, summarize_
                          .dots = c(summarize_by,
                                    "FirstAOI",
                                    predictor_columns))
+  
   df_summarized <- summarize_(df_grouped,
-                            .dots = list(FirstSwitch = interp(~TIME_COL[first(which(SwitchAOI), order_by= TIME_COL)], TIME_COL = time_col)
-                                         ))
-
+                            .dots = list(FirstSwitch = interp(~ifelse(sum(which(SwitchAOI)) > 0,
+                                                                      min(TIME_COL[SwitchAOI], na.rm=TRUE),
+                                                                      NA), TIME_COL = as.name(time_col))
+                            ))
+                              
   df_summarized <- as.data.frame(df_summarized)
   class(df_summarized) <- c('switch_data', class(df_summarized))
   attr(df_summarized, "eyetrackingR") <- list(data_options = data_options)
@@ -216,8 +251,9 @@ plot.onset_data <- function(x, predictor_columns=NULL, ...) {
 
   # summarize by time bin:
   df_clean[[".Time"]] <- floor(df_clean[[data_options$time_column]] / smoothing_window_size) * smoothing_window_size
+  
   df_grouped <- group_by_(df_clean,
-                         .dots = c(predictor_columns, data_options$participant_column, ".Time", "FirstAOI", onset_attr$distractor_aoi, onset_attr$target_aoi))
+                         .dots = c(predictor_columns, data_options$participant_column, ".Time", "FirstAOI"))
   df_smoothed <- summarize(df_grouped, SwitchAOI = mean(SwitchAOI, na.rm=TRUE))
 
   # collapse into lines for graphing:
@@ -240,6 +276,10 @@ plot.onset_data <- function(x, predictor_columns=NULL, ...) {
   } else {
     color_factor <- predictor_columns[1]
   }
+  
+  # make FirstAOI lines consistently solid==target
+  df_plot$FirstAOI <- factor(df_plot$FirstAOI, levels=c(onset_attr$target_aoi,onset_attr$distractor_aoi))
+  
   g <- ggplot(df_plot, aes_string(x = ".Time", y = "SwitchAOI",
                                   group = "FirstAOI",
                                   color = color_factor)) +

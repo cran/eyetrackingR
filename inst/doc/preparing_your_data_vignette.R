@@ -8,12 +8,12 @@ library("eyetrackingR")
 
 data("word_recognition")
 data <- make_eyetrackingr_data(word_recognition, 
-                       participant_column = "ParticipantName",
-                       trial_column = "Trial",
-                       time_column = "TimeFromTrialOnset",
-                       trackloss_column = "TrackLoss",
-                       aoi_columns = c('Animate','Inanimate'),
-                       treat_non_aoi_looks_as_missing = TRUE
+                               participant_column = "ParticipantName",
+                               trial_column = "Trial",
+                               time_column = "TimeFromTrialOnset",
+                               trackloss_column = "TrackLoss",
+                               aoi_columns = c('Animate','Inanimate'),
+                               treat_non_aoi_looks_as_missing = TRUE
 )
 
 ## ---- eval=FALSE---------------------------------------------------------
@@ -67,7 +67,7 @@ sd(1- trackloss_clean_subjects$TracklossForParticipant)
 
 ## ---- warning=FALSE------------------------------------------------------
 # look at the NumTrials column
-(final_summary <- describe_data(response_window_clean, 'Animate', 'ParticipantName'))
+(final_summary <- describe_data(response_window_clean, describe_column = 'Animate', group_columns = 'ParticipantName'))
 
 ## ---- warning=FALSE------------------------------------------------------
 mean(final_summary$NumTrials)

@@ -38,9 +38,9 @@ plot(data_summary)
 ## ---- warning=FALSE------------------------------------------------------
 # aggregate by subject across the response window
 response_window_agg_by_sub <- make_time_window_data(response_window_clean, 
-                                             aois='Animate',
-                                             predictor_columns=c('Target','Age','MCDI_Total'),
-                                             summarize_by = "ParticipantName")
+                                                    aois='Animate',
+                                                    predictor_columns=c('Target','Age','MCDI_Total'),
+                                                    summarize_by = "ParticipantName")
 
 # take a quick peek at data
 plot(response_window_agg_by_sub, predictor_columns="Target", dv = "ArcSin")
@@ -57,7 +57,7 @@ response_window_agg_by_sub$AgeC <- response_window_agg_by_sub$Age - mean(respons
 response_window_agg_by_sub$MCDI_TotalC <- response_window_agg_by_sub$MCDI_Total - mean(response_window_agg_by_sub$MCDI_Total)
 
 model <- lm(ArcSin ~ Target*AgeC*MCDI_TotalC, data=response_window_agg_by_sub)
-broom::tidy(model)
+summary(model)
 
 ## ---- warning=FALSE------------------------------------------------------
 response_window_agg <- make_time_window_data(response_window_clean, 
@@ -90,7 +90,7 @@ plot(model_time_window)
 
 ## ---- warning=FALSE------------------------------------------------------
 model_time_window_logit <- lmer(LogitAdjusted ~ TargetC + (1 + TargetC | Trial) + (1 | ParticipantName), 
-                          data = response_window_agg, REML = FALSE)
+                                data = response_window_agg, REML = FALSE)
 plot(model_time_window_logit)
 drop1(model_time_window_logit,~.,test="Chi")
 est_logit <- broom::tidy(model_time_window_logit, effects="fixed")

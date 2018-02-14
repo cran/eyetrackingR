@@ -4,9 +4,11 @@ author: "Jacob Dink & Brock Ferguson"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteEngine{knitr::rmarkdown}
   %\VignetteIndexEntry{Preparing your data for eyetrackingR}
   %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  chunk_output_type: console
 ---
 
 > **Our Experiment**: Each eyetrackingR vignette uses the *eyetrackingR* package to analyze real data from a simple 2-alternative forced choice (2AFC) word recognition task administered to 19- and 24-month-olds.
@@ -63,12 +65,12 @@ library("eyetrackingR")
 
 data("word_recognition")
 data <- make_eyetrackingr_data(word_recognition, 
-                       participant_column = "ParticipantName",
-                       trial_column = "Trial",
-                       time_column = "TimeFromTrialOnset",
-                       trackloss_column = "TrackLoss",
-                       aoi_columns = c('Animate','Inanimate'),
-                       treat_non_aoi_looks_as_missing = TRUE
+                               participant_column = "ParticipantName",
+                               trial_column = "Trial",
+                               time_column = "TimeFromTrialOnset",
+                               trackloss_column = "TrackLoss",
+                               aoi_columns = c('Animate','Inanimate'),
+                               treat_non_aoi_looks_as_missing = TRUE
 )
 ```
 
@@ -156,7 +158,7 @@ Finally, our trials always ended after 21 seconds. So we'll simply remove data f
 response_window <- subset_by_window(response_window, window_end_time = 21000, rezero= FALSE, remove= TRUE)
 ```
 
-In summary, we have subset the data to focus on our time window of interest (a "response window" beginning 500ms pre-word-onset, 15500ms after the start of the trial, and ending at the end of the trial 5500ms later)
+In summary, we have subset the data to focus on our time window of interest.
 
 ## Dealing with trackloss
 
@@ -198,7 +200,7 @@ sd(1- trackloss_clean_subjects$TracklossForParticipant)
 
 ```{r, warning=FALSE}
 # look at the NumTrials column
-(final_summary <- describe_data(response_window_clean, 'Animate', 'ParticipantName'))
+(final_summary <- describe_data(response_window_clean, describe_column = 'Animate', group_columns = 'ParticipantName'))
 ```
 
 ### Summarize number of trials contributed

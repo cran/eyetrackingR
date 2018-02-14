@@ -102,8 +102,8 @@ make_time_sequence_data <- function (data,
                               summarize_by = summarize_by)
     })
     out <- bind_rows(list_of_dfs)
-    out <- as.data.frame(out)
-    class(out) <- c('time_sequence_data', class(out))
+    out <- as_data_frame(out)
+    class(out) <- unique(c('time_sequence_data', 'eyetrackingR_df', class(out)))
     attr(out,"eyetrackingR") <- list(
       data_options = data_options,
       summarized_by = summarize_by,
@@ -154,7 +154,7 @@ make_time_sequence_data <- function (data,
   out <- left_join(df_summarized, time_codes, by='TimeBin')
 
   out <- as.data.frame(out)
-  class(out) <- c('time_sequence_data', class(out))
+  class(out) <- unique(c('time_sequence_data', 'eyetrackingR_df', class(out)))
   attr(out,"eyetrackingR") <- list(
     data_options = data_options,
     summarized_by = summarize_by,
@@ -263,7 +263,7 @@ analyze_time_bins.time_sequence_data <- function(data,
     
     # for lm, t.test, wilcox, need to check that there's no more than one observation per 
     # participant per predictor-level per time bin.
-    df_grouped <- group_by_(data, .dots = c("Time", data_summarized_by, predictor_column))
+    df_grouped <- group_by_(data, .dots = paste0("`",c("Time", data_summarized_by, predictor_column), "`"))
     df_summarized <- summarize(df_grouped, N = n()) %>% ungroup()
     if (any(df_summarized$N > 1)) {
       warning(test, " almost always requires no more than one observation per ", data_summarized_by, 
@@ -334,7 +334,7 @@ analyze_time_bins.time_sequence_data <- function(data,
   } else {
     dv <- gsub(formula[2], pattern = "()", replacement = "", fixed = TRUE)
   }
-  
+
   # Run a model for each time-bin
   if (test!="boot_splines") {
     if (!quiet) message("Computing ", test, " for each time bin...")
@@ -557,7 +557,7 @@ analyze_time_bins.time_sequence_data <- function(data,
 
   # Rename Class, add attributes
   out <- as.data.frame(out)
-  class(out) <- c('bin_analysis', class(out))
+  class(out) <- unique(c('bin_analysis', 'eyetrackingR_df', class(out)))
   attr(out,"eyetrackingR") <- c(
     attr(data, "eyetrackingR"),
     list(formula= formula,

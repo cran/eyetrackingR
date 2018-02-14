@@ -102,7 +102,7 @@ plot(df_timeclust) +  ylab("T-Statistic") + theme_light()
 summary(df_timeclust)
 
 ## ---- warning=FALSE------------------------------------------------------
-clust_analysis <- analyze_time_clusters(df_timeclust, within_subj=TRUE, paired=TRUE,
+clust_analysis <- analyze_time_clusters(df_timeclust, within_subj=TRUE, paired=TRUE,quiet = TRUE,
                                         samples=150) # in practice, you should use a lot more
 plot(clust_analysis) + theme_light()
 
@@ -124,8 +124,9 @@ plot(df_timeclust_between) +  ylab("T-Statistic") + theme_light()
 summary(df_timeclust_between)
 
 ## ------------------------------------------------------------------------
-clust_analysis_between <- analyze_time_clusters(df_timeclust_between, within_subj = FALSE, 
-                                        samples=100) # in practice, you should use a lot more
+set.seed(5)
+clust_analysis_between <- analyze_time_clusters(df_timeclust_between, within_subj = FALSE, quiet = TRUE,
+                                        samples=150) # in practice, you should use a lot more
 plot(clust_analysis_between) + theme_light()
 summary(clust_analysis_between)
 

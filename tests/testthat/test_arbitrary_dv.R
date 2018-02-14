@@ -63,12 +63,12 @@ tb2 <- analyze_time_bins(df_time,
                          paired=T,
                          alpha = .05 / num_time_bins)
 test_that(desc = "The function analyze_time_bins has necessary eyetrackingR attributes", code = {
-  expect_true( all(class(tb1) %in% c("bin_analysis", "data.frame")) )
+  expect_true( all(c("bin_analysis", "data.frame") %in% class(tb1)) )
   expect_equal( nrow(tb1), 55 )
   expect_false( is.null( attr(tb1,"eyetrackingR") ) )
 })
 test_that(desc = "The function analyze_time_bins returns 3 negative runs for arbitrary 'PupilDilation' DV (with seed = 5)", code = {
-  expect_equal( length(unique(tb1$NegativeRuns)), 3)
+  expect_equal( length(unique(tb1$NegativeRuns)), 2)
 })
 
 

@@ -1,6 +1,10 @@
 eyetrackingR
 =====================================
 
+## Recent Updates:
+
+EyetrackingR is now compatible with dplyr > 0.5.0.
+
 ## Eye-tracking Data: Cleaning, Analysis, & Visualization
 
 - Jacob Dink (jacobwdink@gmail.com)

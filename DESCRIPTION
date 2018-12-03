@@ -1,6 +1,6 @@
 Package: eyetrackingR
 Type: Package
-Version: 0.1.7
+Version: 0.1.8
 Title: Eye-Tracking Data Analysis
 Authors@R: c(
 	person("Jacob", "Dink", email = "jacobwdink@gmail.com", role = c("aut", "cre")),
@@ -13,7 +13,7 @@ Description: A set of tools that address tasks along the pipeline from raw
     bootstrapping approaches.
 URL: http://eyetracking-r.com
 BugReports: https://github.com/jwdink/eyetrackingR/issues
-Date: 2018-2-14 12:15:02
+Date: 2018-12-03
 Depends: R (>= 3.2.0), dplyr (>= 0.7.4)
 License: MIT + file LICENSE
 LazyData: true
@@ -22,11 +22,11 @@ Imports: broom (>= 0.3.7), ggplot2 (>= 2.0), lazyeval (>= 0.1.10), zoo
 Suggests: pbapply, knitr, lme4 (>= 1.1-10), Matrix, testthat,
         rmarkdown, doMC, foreach
 VignetteBuilder: knitr
-RoxygenNote: 6.0.1
+RoxygenNote: 6.1.1
 NeedsCompilation: no
-Packaged: 2018-02-14 21:16:53 UTC; jacobdink
+Packaged: 2018-12-03 20:02:33 UTC; jacobdink
 Author: Jacob Dink [aut, cre],
   Brock Ferguson [aut]
 Maintainer: Jacob Dink <jacobwdink@gmail.com>
 Repository: CRAN
-Date/Publication: 2018-02-14 21:41:27 UTC
+Date/Publication: 2018-12-03 22:00:39 UTC

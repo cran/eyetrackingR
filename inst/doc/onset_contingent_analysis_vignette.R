@@ -41,8 +41,7 @@ response_window_clean$TrialDistractor <- ifelse(test = response_window_clean$Tar
                                                 no = response_window_clean$Animate)
 
 ## ---- warning=FALSE------------------------------------------------------
-onsets <- make_onset_data(response_window_clean, onset_time = 15500, 
-                          fixation_window_length = 1, target_aoi='TrialTarget')
+onsets <- make_onset_data(response_window_clean, onset_time = 15500, target_aoi='TrialTarget')
 # participants' ability to orient to the trial target overall:
 plot(onsets) + theme(legend.text=element_text(size=5))
 

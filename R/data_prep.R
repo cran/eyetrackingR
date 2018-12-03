@@ -185,6 +185,11 @@ add_aoi <- function(data, aoi_dataframe,
                      y_min_col = "T", y_max_col = "B"
 ) {
   
+  stopifnot(is.character(aoi_name))
+  
+  if (nrow(aoi_dataframe) > nrow(distinct(aoi_dataframe)))
+    warning("Your `aoi_dataframe` has duplicate rows.")
+  
   ## Helper
   .inside_rect = function(pt, ltrb) {
     if (is.null(dim(pt))) {
@@ -233,6 +238,7 @@ add_aoi <- function(data, aoi_dataframe,
   
   ## Make AOI column
   message("Making ", aoi_name, " AOI...")
+  
   data[[aoi_name]] <- .inside_rect(pt    = cbind(df_joined[[x_col]], df_joined[[y_col]]),
                                    ltrb  = cbind(df_joined[[x_min_col]], df_joined[[y_min_col]], df_joined[[x_max_col]], df_joined[[y_max_col]])
   )
@@ -336,7 +342,7 @@ subset_by_window <- function(data,
       if (is.integer(time_vec)) return(NA_integer_)
       else return(NA_real_)
     }
-    return(time_vec[bool])
+    return(time_vec[which(bool)])
   }
   
   # Prelims:

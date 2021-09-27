@@ -4,8 +4,13 @@
 \alias{make_time_window_data}
 \title{Make a dataset collapsing over a time-window}
 \usage{
-make_time_window_data(data, aois = NULL, predictor_columns = NULL,
-  other_dv_columns = NULL, summarize_by = NULL)
+make_time_window_data(
+  data,
+  aois = NULL,
+  predictor_columns = NULL,
+  other_dv_columns = NULL,
+  summarize_by = NULL
+)
 }
 \arguments{
 \item{data}{The output of \code{make_eyetrackingr_data}}
@@ -68,6 +73,7 @@ response_window_agg_by_sub <- make_time_window_data(data,
                                                     summarize_by = "ParticipantName"
 )
 
+\dontrun{
 # optionally included additional columns for use as predictors
 # in later statistical models
 response_window_agg_by_sub <- make_time_window_data(data,
@@ -78,5 +84,6 @@ response_window_agg_by_sub <- make_time_window_data(data,
 
 # plot the aggregated data for sanity check
 plot(response_window_agg_by_sub, predictor_columns="Age", dv = "LogitAdjusted") 
+}
 
 }

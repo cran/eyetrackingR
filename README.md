@@ -1,12 +1,20 @@
 eyetrackingR
 =====================================
 
+<!-- badges: start -->
+  [![CRAN status](https://www.r-pkg.org/badges/version/eyetrackingR)](https://CRAN.R-project.org/package=eyetrackingR)
+  <!-- badges: end -->
+  
 ## Recent Updates:
 
-EyetrackingR is now compatible with dplyr > 0.5.0.
+Note this is an active development (with permission) of the archived CRAN package eyetrackingR. The archived version is still available at https://github.com/jwdink/eyetrackingr
+
+- Warnings given by latest versions of dplyr and ggplot2 have been fixed.
+- Support for plotting predictions of binomial models using glmer, glmmTMB and glmmPQL
 
 ## Eye-tracking Data: Cleaning, Analysis, & Visualization
 
+- Samuel Forbes (samuel.h.forbes@gmail.com)
 - Jacob Dink (jacobwdink@gmail.com)
 - Brock Ferguson (brock.ferguson@gmail.com)
 
@@ -32,7 +40,7 @@ library(eyetrackingR)
 For the development version (make sure you have run `install.packages("devtools")` to get devtools first):
 
 ```
-devtools::install_github("jwdink/eyetrackingR")
+devtools::install_github("samhforbes/eyetrackingR")
 ```
 ---
 
@@ -56,6 +64,6 @@ From here, all of eyetrackingR's functionality becomes available for this data. 
 
 ***
 
-Copyright (c) 2015, Jacob Dink and Brock Ferguson
+Copyright (c) 2021, Samuel Forbes, Jacob Dink and Brock Ferguson
 
 Released under the MIT License (see LICENSE for details)

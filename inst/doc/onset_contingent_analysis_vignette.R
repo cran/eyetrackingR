@@ -1,4 +1,4 @@
-## ----results='hide'------------------------------------------------------
+## ----results='hide'-----------------------------------------------------------
 set.seed(42)
 library("Matrix")
 library("lme4")
@@ -31,7 +31,7 @@ response_window_clean$Target <- as.factor( ifelse(test = grepl('(Spoon|Bottle)',
                                        yes = 'Inanimate', 
                                        no  = 'Animate') )
 
-## ---- warning=FALSE------------------------------------------------------
+## ---- warning=FALSE-----------------------------------------------------------
 # recode AOIs to target & distractor
 response_window_clean$TrialTarget <- ifelse(test = response_window_clean$Target == 'Animate', 
                                             yes = response_window_clean$Animate, 
@@ -40,20 +40,20 @@ response_window_clean$TrialDistractor <- ifelse(test = response_window_clean$Tar
                                                 yes = response_window_clean$Inanimate, 
                                                 no = response_window_clean$Animate)
 
-## ---- warning=FALSE------------------------------------------------------
+## ---- warning=FALSE-----------------------------------------------------------
 onsets <- make_onset_data(response_window_clean, onset_time = 15500, target_aoi='TrialTarget')
 # participants' ability to orient to the trial target overall:
 plot(onsets) + theme(legend.text=element_text(size=5))
 
-## ---- warning=FALSE------------------------------------------------------
+## ---- warning=FALSE-----------------------------------------------------------
 # participants' ability to orient to the trial target, split by which target:
 plot(onsets, predictor_columns = "Target") + theme(legend.text=element_text(size=6))
 
-## ---- warning=FALSE------------------------------------------------------
+## ---- warning=FALSE-----------------------------------------------------------
 # we can also visualize numeric predictors:
 plot(onsets, predictor_columns = "MCDI_Total") + theme(legend.text=element_text(size=6))
 
-## ---- warning= FALSE-----------------------------------------------------
+## ---- warning= FALSE----------------------------------------------------------
 onset_switches <- make_switch_data(onsets, predictor_columns = "Target")
 
 # visualize subject's switch times
@@ -69,6 +69,6 @@ onset_switches$TargetC <- scale(onset_switches$TargetC, center=TRUE, scale=FALSE
 model_switches <- lmer(FirstSwitch ~ FirstAOIC*TargetC + 
                 (1 | Trial) + (1 | ParticipantName), data=onset_switches, REML=FALSE)
 # cleanly show important parts of model (see `summary()` for more)
-broom::tidy(model_switches, effects="fixed")
+broom.mixed::tidy(model_switches, effects="fixed")
 drop1(model_switches,~.,test="Chi")
 

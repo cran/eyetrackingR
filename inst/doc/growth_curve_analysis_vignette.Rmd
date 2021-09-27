@@ -83,7 +83,7 @@ Growth curve analysis (GCA) lets us model the timecourse of attention by fitting
 
 eyetrackingR sets us up nicely for GCA. Above, we used `make_time_sequence_data` to generate the dataframe. This dataframe includes everything we need for GCA.
 
-First, it includes the same dependent variable columns as `make_time_window_data`, giving us an option of analyzing raw proportions or its transformations (for more detail, see the documentation or the [window analysis vignette](window analysis_vignette.html) ).
+First, it includes the same dependent variable columns as `make_time_window_data`, giving us an option of analyzing raw proportions or its transformations (for more detail, see the documentation or the [window analysis vignette](window_analysis_vignette.html) ).
 
 * `Prop` -- the mean of raw proportion scores
 * `LogitAdjusted` -- the logit transformation, `log( Prop / (1-Prop) )`, adjusted to avoid -/+ infinity
@@ -129,7 +129,7 @@ model_time_sequence <- lmer(Elog ~ TargetC*(ot1) + (1 + ot1 | Trial) + (1 + ot1 
               data = response_time, REML = FALSE)
 
 # cleanly show important parts of model (see `summary()` for more)
-broom::tidy(model_time_sequence, effects = "fixed")
+broom.mixed::tidy(model_time_sequence, effects = "fixed")
 drop1(model_time_sequence, ~., test="Chi")
 ```
 
@@ -159,7 +159,7 @@ model_time_sequence <- lmer(Elog ~ TargetC*(ot1 + ot2 + ot3 + ot4) + (1 | Trial)
 #                             data = response_time, REML = FALSE)
 
 # cleanly show important parts of model (see `summary()` for more)
-broom::tidy(model_time_sequence, effects = "fixed")
+broom.mixed::tidy(model_time_sequence, effects = "fixed")
 drop1(model_time_sequence, ~., test="Chi")
 
 plot(response_time, predictor_column = "Target", dv = "Elog", model = model_time_sequence) +
@@ -178,4 +178,4 @@ For more general approaches to estimating time windows of divergence (estimating
 
 ## References
 
-Mirman, D., Dixon, J., & Magnuson, J. S. (2008). Statistical and computational models of the visual world paradigm: Growth curves and individual differences. Journal of Memory and Language, 59, 474–494.
+Mirman, D., Dixon, J., & Magnuson, J. S. (2008). Statistical and computational models of the visual world paradigm: Growth curves and individual differences. Journal of Memory and Language, 59, 474–494. https://doi.org/10.1016/j.jml.2007.11.006.

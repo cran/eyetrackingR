@@ -5,12 +5,29 @@
 \alias{make_boot_splines_data.time_sequence_data}
 \title{Bootstrap resample splines for time-series data.}
 \usage{
-make_boot_splines_data(data, predictor_column, within_subj, aoi,
-  bs_samples, smoother, resolution, alpha, ...)
+make_boot_splines_data(
+  data,
+  predictor_column,
+  within_subj,
+  aoi,
+  bs_samples,
+  smoother,
+  resolution,
+  alpha,
+  ...
+)
 
-\method{make_boot_splines_data}{time_sequence_data}(data, predictor_column,
-  within_subj, aoi = NULL, bs_samples = 1000,
-  smoother = "smooth.spline", resolution = NULL, alpha = 0.05, ...)
+\method{make_boot_splines_data}{time_sequence_data}(
+  data,
+  predictor_column,
+  within_subj,
+  aoi = NULL,
+  bs_samples = 1000,
+  smoother = "smooth.spline",
+  resolution = NULL,
+  alpha = 0.05,
+  ...
+)
 }
 \arguments{
 \item{data}{The output of \code{time_sequence_data()}}
@@ -51,6 +68,7 @@ Limited to statistical test between two conditions.
 }}
 
 \examples{
+\dontrun{
 data(word_recognition)
 data <- make_eyetrackingr_data(word_recognition, 
                                participant_column = "ParticipantName",
@@ -71,6 +89,6 @@ df_bootstrapped <- make_boot_splines_data(response_time,
                                           bs_samples = 500, 
                                           alpha = .05,
                                           smoother = "smooth.spline") 
-
+}
 
 }

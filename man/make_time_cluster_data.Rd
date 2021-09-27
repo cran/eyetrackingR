@@ -7,9 +7,16 @@
 \usage{
 make_time_cluster_data(data, ...)
 
-\method{make_time_cluster_data}{time_sequence_data}(data, predictor_column,
-  aoi = NULL, test, threshold = NULL, formula = NULL,
-  treatment_level = NULL, ...)
+\method{make_time_cluster_data}{time_sequence_data}(
+  data,
+  predictor_column,
+  aoi = NULL,
+  test,
+  threshold = NULL,
+  formula = NULL,
+  treatment_level = NULL,
+  ...
+)
 }
 \arguments{
 \item{data}{The output of the \code{make_time_sequence_data} function}
@@ -62,6 +69,7 @@ by manually specifying the formula.
 }}
 
 \examples{
+\dontrun{
 data(word_recognition)
 data <- make_eyetrackingr_data(word_recognition, 
                                participant_column = "ParticipantName",
@@ -103,5 +111,6 @@ time_cluster_data <- make_time_cluster_data(data = response_time,
                            threshold = 1.5,
                            formula = LogitAdjusted ~ Sex + (1|Trial) + (1|ParticipantName)
 )
+}
   
 }

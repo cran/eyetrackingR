@@ -3,8 +3,9 @@ note <- sprintf("R package version %s", meta$Version)
 
 bibentry(bibtype = "Manual",
          title = "{eyetrackingR}",
-         author = c(person("Jacob", "Dink"),
+         author = c(person("Samuel", "Forbes"),
+                    person("Jacob", "Dink"),
                     person("Brock", "Ferguson")),
          year = year,
          note = note,
-         url = "http://www.eyetracking-R.com")
+         url = "http://www.eyetracking-r.com/")

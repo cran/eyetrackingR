@@ -7,8 +7,7 @@
 \usage{
 make_switch_data(data, predictor_columns, summarize_by)
 
-\method{make_switch_data}{onset_data}(data, predictor_columns = NULL,
-  summarize_by = NULL)
+\method{make_switch_data}{onset_data}(data, predictor_columns = NULL, summarize_by = NULL)
 }
 \arguments{
 \item{data}{The output of \code{make_onset_data}}
@@ -33,6 +32,7 @@ Take trials split by initial-AOI, and determine how quickly participants switch 
 }}
 
 \examples{
+\dontrun{
 data(word_recognition)
 data <- make_eyetrackingr_data(word_recognition, 
                                participant_column = "ParticipantName",
@@ -51,5 +51,6 @@ onsets <- make_onset_data(inanimate_trials, onset_time = 15500,
 df_switch <- make_switch_data(onsets, predictor_columns = "MCDI_Total", 
              summarize_by = "ParticipantName")
 plot(df_switch, "MCDI_Total")
+}
                           
 }

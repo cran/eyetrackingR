@@ -4,8 +4,13 @@
 \alias{make_onset_data}
 \title{Make onset-contingent data.}
 \usage{
-make_onset_data(data, onset_time, fixation_window_length = NULL,
-  target_aoi, distractor_aoi = NULL)
+make_onset_data(
+  data,
+  onset_time,
+  fixation_window_length = NULL,
+  target_aoi,
+  distractor_aoi = NULL
+)
 }
 \arguments{
 \item{data}{The original (verified) data}
@@ -28,6 +33,7 @@ a rolling window to determine what length consitutes a switch. Augment original 
 indicating whether each row is a switch-away sample.
 }
 \examples{
+\dontrun{
 data(word_recognition)
 data <- make_eyetrackingr_data(word_recognition, 
                                participant_column = "ParticipantName",
@@ -41,5 +47,6 @@ response_window <- subset_by_window(data, window_start_time = 15500, window_end_
                                     rezero = FALSE)
 inanimate_trials <- subset(response_window, grepl('(Spoon|Bottle)', Trial))
 onsets <- make_onset_data(inanimate_trials, onset_time = 15500, target_aoi='Inanimate')
+}
 
 }

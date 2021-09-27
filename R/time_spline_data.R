@@ -26,6 +26,7 @@ make_boot_splines_data = function(data, predictor_column, within_subj, aoi, bs_s
 #' @param ... Ignored
 #' 
 #' @examples 
+#' \dontrun{
 #' data(word_recognition)
 #' data <- make_eyetrackingr_data(word_recognition, 
 #'                                participant_column = "ParticipantName",
@@ -46,7 +47,7 @@ make_boot_splines_data = function(data, predictor_column, within_subj, aoi, bs_s
 #'                                           bs_samples = 500, 
 #'                                           alpha = .05,
 #'                                           smoother = "smooth.spline") 
-#' 
+#' }
 #' 
 #' @export
 #' @return A bootstrapped distribution of samples for each time-bin
@@ -191,12 +192,17 @@ make_boot_splines_data.time_sequence_data <- function (data,
     # Group by participant, timebin; Calculate the difference in proportion between level1 and level2
     level1 <- levels(data[[predictor_column]])[1]
     level2 <- levels(data[[predictor_column]])[2]
-    df_grouped <- group_by_(data, .dots = c(summarized_by, "Time") )
-    df_diff <- summarize_(df_grouped,
-                         .dots = list(Prop1 = interp(~mean(Prop[PRED_COL == level1]), PRED_COL = as.name(predictor_column)),
-                                      Prop2 = interp(~mean(Prop[PRED_COL == level2]), PRED_COL = as.name(predictor_column)),
-                                      Prop  = interp(~Prop1 - Prop2)
-                         ))
+    # df_grouped <- group_by_(data, .dots = c(summarized_by, "Time") )
+    # df_diff <- summarize_(df_grouped,
+    #                      .dots = list(Prop1 = interp(~mean(Prop[PRED_COL == level1]), PRED_COL = as.name(predictor_column)),
+    #                                   Prop2 = interp(~mean(Prop[PRED_COL == level2]), PRED_COL = as.name(predictor_column)),
+    #                                   Prop  = interp(~Prop1 - Prop2)
+    #                      )) #here
+    df_grouped <- group_by(data, !!!syms(summarized_by), Time)
+    df_diff <- summarize(df_grouped,
+                         Prop1 = mean(Prop[!!sym(predictor_column) == level1]),
+                         Prop2 = mean(Prop[!!sym(predictor_column) == level2]),
+                         Prop = .data$Prop1 - .data$Prop2)
 
     # remove all samples where Prop == NA;
     df_diff <- df_diff[!is.na(df_diff$Prop), ]
@@ -254,6 +260,7 @@ analyze_boot_splines <- function(data) {
 #' @param  data The output of the \code{boot_splines_data} function
 #' 
 #' @examples 
+#' \dontrun{
 #' data(word_recognition)
 #' data <- make_eyetrackingr_data(word_recognition, 
 #'                                participant_column = "ParticipantName",
@@ -280,7 +287,7 @@ analyze_boot_splines <- function(data) {
 #' # analyze the divergences that occurred
 #' boot_splines_analysis <- analyze_boot_splines(df_bootstrapped)
 #' summary(boot_splines_analysis)
-#' 
+#' }
 #' @export
 #' @return A dataframe indicating means and CIs for each time-bin
 analyze_boot_splines.boot_splines_data <- function(data) {

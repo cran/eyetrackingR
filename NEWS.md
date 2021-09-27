@@ -1,5 +1,10 @@
 # eyetrackingR 
 
+Changes in 0.2.0
+* Repairing for resubmission to CRAN
+* Adding compatibility with new versions of dplyr, tidyr and ggplot2
+* Inbuilt support for binomial, glmmPQL and glmmTMB models
+
 Changes in 0.1.8:
 * Fixes a bug in make_onset_data.
 

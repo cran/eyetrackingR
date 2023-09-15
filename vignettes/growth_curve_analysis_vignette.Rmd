@@ -1,10 +1,10 @@
 ---
 title: "Performing a growth curve analysis using eyetrackingR"
-author: "Jacob Dink & Brock Ferguson"
+author: "Samuel Forbes, Jacob Dink & Brock Ferguson"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Performing a growth curve analysis}
+  %\VignetteIndexEntry{Performing a growth curve analysis using eyetrackingR}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
 editor_options: 

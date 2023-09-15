@@ -95,7 +95,7 @@ threshold_t = qt(p = 1 - .05/2,
 
 ## ---- warning=FALSE-----------------------------------------------------------
 df_timeclust <- make_time_cluster_data(response_time, 
-                                      test= "t.test", paired=TRUE,
+                                      test= "t.test", paired=T,
                                       predictor_column = "Target", 
                                       threshold = threshold_t) 
 plot(df_timeclust) +  ylab("T-Statistic") + theme_light()

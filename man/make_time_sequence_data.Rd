@@ -55,8 +55,8 @@ use 0.5).
  \item \code{Weights} - These attempt to further correct the Elog transformation, since the
  variance of the logit depends on the mean. They can be used in a mixed effects model by setting
  the \code{weights=Weights} in \code{lmer} (note that this is the reciprocal of the
-weights calculated in \href{http://talklab.psy.gla.ac.uk/tvw/elogit-wt.html}{this empirical logit
-walkthrough}, so you do *not* set \code{weights = 1/Weights} as done there.) 
+weights calculated in \href{https://talklab.psy.gla.ac.uk/tvw/elogit-wt.html}{this empirical logit
+walkthrough}, so you do *not* set \code{weights = 1/Weights} as done there.)
  \item \code{ArcSin} - The arcsine-root transformation of the raw proportions, defined as
 \code{asin(sqrt(Prop))}
  \item \code{ot} - These columns (ot1-ot7) represent (centered) orthogonal time polynomials,
@@ -67,7 +67,7 @@ walkthrough}, so you do *not* set \code{weights = 1/Weights} as done there.)
 }
 \examples{
 data(word_recognition)
-data <- make_eyetrackingr_data(word_recognition, 
+data <- make_eyetrackingr_data(word_recognition,
                                participant_column = "ParticipantName",
                                trial_column = "Trial",
                                time_column = "TimeFromTrialOnset",
@@ -93,7 +93,7 @@ response_time <- make_time_sequence_data(data,
 response_time <- make_time_sequence_data(data,
                                          time_bin_size = 250,
                                          predictor_columns = c("Sex","MCDI_Total"),
-                                         aois = "Animate", 
+                                         aois = "Animate",
                                          summarize_by = "ParticipantName"
 )
 

@@ -49,7 +49,7 @@ plot(response_window_agg_by_sub, predictor_columns="Target", dv = "ArcSin")
 describe_data(response_window_agg_by_sub, describe_column = "ArcSin", group_columns = "Target")
 
 # simple paired t-test between conditions
-t.test(ArcSin ~ Target, data= response_window_agg_by_sub, paired=TRUE)
+with(response_window_agg_by_sub, t.test(ArcSin[Target == 'Animate'], ArcSin[Target == 'Inanimate'], paired=TRUE))
 
 ## ---- warning=FALSE-----------------------------------------------------------
 # you should almost always sum-code and center your predictors when performing regression analyses

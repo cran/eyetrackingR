@@ -31,7 +31,7 @@ response_window_clean$Target <- as.factor( ifelse(test = grepl('(Spoon|Bottle)',
                                        yes = 'Inanimate', 
                                        no  = 'Animate') )
 
-## ---- warning=FALSE-----------------------------------------------------------
+## ----warning=FALSE------------------------------------------------------------
 # aggregate across trials within subjects in time analysis
 response_time <- make_time_sequence_data(response_window_clean, time_bin_size = 100, 
                                  predictor_columns = c("Target"),
@@ -43,7 +43,7 @@ plot(response_time, predictor_column = "Target") +
   theme_light() +
   coord_cartesian(ylim = c(0,1))
 
-## ---- warning=FALSE-----------------------------------------------------------
+## ----warning=FALSE------------------------------------------------------------
 # generate dataframe summarizing values of each vector
 timecodes <- unique(response_time[, c('ot1','ot2','ot3','ot4','ot5','ot6','ot7')])
 timecodes$num <- 1:nrow(timecodes)
@@ -61,7 +61,7 @@ ggplot(timecodes, aes(x=num, y=ot1)) +
 
 round(cor(timecodes[, c(1:7)]),5)
 
-## ---- warning=FALSE-----------------------------------------------------------
+## ----warning=FALSE------------------------------------------------------------
 # sum-code and center our predictor:
 response_time$TargetC <- ifelse(response_time$Target == 'Animate', .5, -.5)
 response_time$TargetC <- as.numeric(scale(response_time$TargetC, center=TRUE, scale=FALSE))
@@ -74,11 +74,11 @@ model_time_sequence <- lmer(Elog ~ TargetC*(ot1) + (1 + ot1 | Trial) + (1 + ot1 
 broom.mixed::tidy(model_time_sequence, effects = "fixed")
 drop1(model_time_sequence, ~., test="Chi")
 
-## ---- warning=FALSE-----------------------------------------------------------
+## ----warning=FALSE------------------------------------------------------------
 plot(response_time, predictor_column = "Target", dv = "Elog", model = model_time_sequence) +
   theme_light()
 
-## ---- warning=FALSE-----------------------------------------------------------
+## ----warning=FALSE------------------------------------------------------------
 model_time_sequence <- lmer(Elog ~ TargetC*(ot1 + ot2 + ot3 + ot4) + (1 | Trial) + (1 | ParticipantName), 
                             data = response_time, REML = FALSE)
 

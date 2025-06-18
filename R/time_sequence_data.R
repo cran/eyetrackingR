@@ -17,8 +17,7 @@
 #'  \item \code{Weights} - These attempt to further correct the Elog transformation, since the
 #'  variance of the logit depends on the mean. They can be used in a mixed effects model by setting
 #'  the \code{weights=Weights} in \code{lmer} (note that this is the reciprocal of the
-#' weights calculated in \href{https://talklab.psy.gla.ac.uk/tvw/elogit-wt.html}{this empirical logit
-#' walkthrough}, so you do *not* set \code{weights = 1/Weights} as done there.)
+#' weights calculated in Mirman's walkthrough, so you do *not* set \code{weights = 1/Weights} as done there.)
 #'  \item \code{ArcSin} - The arcsine-root transformation of the raw proportions, defined as
 #' \code{asin(sqrt(Prop))}
 #'  \item \code{ot} - These columns (ot1-ot7) represent (centered) orthogonal time polynomials,
@@ -692,9 +691,10 @@ plot.time_sequence_data <- function(x, predictor_column = NULL, dv='Prop', model
       }
     }else{
       if('glmmTMB' %in% class(model)){
-        if(model$modelInfo$family$family == 'binomial' ){
-          if(dv != 'Prop'){stop('Can only plot binomial against raw Prop. Try another method if this doesnt work for you')}
-          x$.Predicted = predict(model, x, type = 'response')
+        if(model$modelInfo$family$family == 'binomial' |
+           model$modelInfo$family$family == 'betabinomial'){
+          if(dv != 'Prop'){stop('Can only plot (beta)binomial against raw Prop. Try another method if this doesnt work for you')}
+          x$.Predicted = predict(model, type = 'response')
         }else {
           formula_as_character <- Reduce(paste, deparse(formula(model)))
           if (!grepl(dv, formula_as_character, fixed = TRUE)) {
